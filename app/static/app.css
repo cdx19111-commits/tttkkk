@@ -185,6 +185,73 @@ select {
 }
 select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(47,111,237,.12); }
 
+/* ---------- 颜色：可搜索下拉（单品牌可达百级选项，原生 select 不适用） ---------- */
+
+.combo { position: relative; }
+
+.combo-btn {
+  height: 34px; min-width: 132px; max-width: 180px;
+  display: inline-flex; align-items: center;
+  padding: 0 30px 0 11px; position: relative;
+  border: 1px solid var(--line); border-radius: 8px; background: #fff;
+  color: var(--ink); font-size: 13px; font-family: inherit;
+  text-align: left; cursor: pointer; outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.combo-btn:hover { border-color: #cdd5e2; }
+.combo-btn:focus-visible,
+.combo.open .combo-btn { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(47,111,237,.12); }
+.combo-text {
+  flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.combo-btn.has-value .combo-text { font-weight: 600; }
+.combo-caret {
+  position: absolute; right: 12px; top: 50%; margin-top: -2px;
+  width: 0; height: 0;
+  border-left: 4.5px solid transparent; border-right: 4.5px solid transparent;
+  border-top: 5px solid #8a95a6;
+}
+
+.combo-panel {
+  position: absolute; z-index: 35; top: calc(100% + 6px); left: 0;
+  width: 272px; padding: 8px;
+  background: #fff; border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: var(--shadow-md);
+}
+.combo-search {
+  width: 100%; height: 32px; padding: 0 10px;
+  border: 1px solid var(--line); border-radius: 7px;
+  background: #f8fafc; color: var(--ink);
+  font-size: 13px; font-family: inherit; outline: none;
+}
+.combo-search:focus { border-color: var(--accent); background: #fff; }
+.combo-list {
+  list-style: none; margin: 6px 0 0; padding: 0;
+  max-height: 264px; overflow-y: auto;
+}
+.combo-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 8px; border-radius: 7px;
+  font-size: 13px; color: var(--ink); cursor: pointer;
+}
+.combo-item:hover { background: #f1f5fb; }
+.combo-item.on { background: rgba(47,111,237,.10); color: var(--accent-dark); font-weight: 600; }
+.ci-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ci-num { color: var(--ink-3); font-size: 11.5px; font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+.ci-flag {
+  flex: 0 0 auto; font-size: 10px; line-height: 15px; padding: 0 4px;
+  color: var(--warn); background: var(--warn-bg);
+  border: 1px solid #f0dfba; border-radius: 4px;
+}
+.combo-empty { padding: 14px 8px; text-align: center; color: var(--ink-3); font-size: 12.5px; }
+.combo-foot {
+  margin-top: 6px; padding: 7px 8px 2px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--ink-3); font-size: 11.5px; line-height: 1.5;
+}
+
+
 .btn {
   height: 34px; padding: 0 14px;
   border: 1px solid transparent; border-radius: 8px;
@@ -230,6 +297,15 @@ select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(47,111,23
   font-size: 13px; font-weight: 600; color: var(--ink);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* 型号未走标准化匹配时，按目录原始名展示，视觉上弱化并打"原始"标记 */
+.card .model.raw { font-weight: 500; color: var(--ink-2); }
+.tag-origin {
+  display: inline-block; margin-right: 4px; vertical-align: 1px;
+  font-size: 10px; line-height: 15px; padding: 0 4px; font-weight: 500;
+  color: var(--warn); background: var(--warn-bg);
+  border: 1px solid #f0dfba; border-radius: 4px;
+}
+.card .sub .color.muted { color: var(--ink-3); }
 .card .sub {
   display: flex; align-items: center; gap: 5px;
   margin-top: 4px; font-size: 12px; color: var(--ink-2);
@@ -308,11 +384,19 @@ select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(47,111,23
 .kv {
   margin: 0; padding: 12px 18px; overflow-y: auto; flex: 1;
   min-height: 0;                 /* 允许在 flex 容器内收缩，否则底部操作区会被挤出可视区 */
-  display: grid; grid-template-columns: 88px 1fr; gap: 9px 12px;
+  display: grid; grid-template-columns: 96px 1fr; gap: 9px 12px;
   align-content: start;
 }
 .kv dt { color: var(--ink-3); font-size: 12px; }
 .kv dd { margin: 0; font-size: 13px; color: var(--ink); word-break: break-all; }
+
+/* 未标准化字段的说明：避免把目录原始值误读为已确认的标准数据 */
+.d-note {
+  margin: 0; padding: 9px 18px;
+  font-size: 11.5px; line-height: 1.6; color: var(--warn);
+  background: var(--warn-bg); border-top: 1px solid #f3e6cd;
+  flex: 0 0 auto;
+}
 
 .drawer-actions {
   display: flex; gap: 10px; padding: 14px 18px 10px;
@@ -403,6 +487,9 @@ code {
   .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .filters { gap: 8px; }
   .filters select { flex: 1 1 calc(50% - 8px); min-width: 0; }
+  .filters .combo { flex: 1 1 calc(50% - 8px); min-width: 0; }
+  .filters .combo-btn { width: 100%; max-width: none; }
+  .combo-panel { width: min(320px, calc(100vw - 44px)); }
   .filters .btn { flex: 0 0 auto; }
   .result-count { width: 100%; margin-left: 0; }
 }
