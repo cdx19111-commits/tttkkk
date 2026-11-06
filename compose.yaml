@@ -1,0 +1,21 @@
+services:
+  gallery:
+    build: .
+    env_file:
+      - .env
+    ports:
+      # 默认仅本机可达，用 SSH 隧道或 HTTPS 反向代理访问
+      - "127.0.0.1:${GALLERY_PORT:-18080}:8000"
+    volumes:
+      - ./runtime:/app/runtime
+      # 图片资产库（V0.3）：图片文件 + gallery.db，只由入库脚本写入
+      - ./v03data:/data/v03
+    environment:
+      - ASSET_ROOT=/data/v03
+      - THUMB_DIR=/data/v03/thumbs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 8s
+      retries: 3

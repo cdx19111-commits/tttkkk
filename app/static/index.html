@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>商品图库 · 图片资产库</title>
+<link rel="stylesheet" href="/static/app.css?v=20261105b">
+</head>
+<body>
+<div class="app">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="logo">
+      <span class="logo-mark">图</span>
+      <div class="logo-text">
+        <strong>商品图库</strong>
+        <span>Image Assets</span>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-group">工作台</div>
+      <button class="nav-item active" data-view="library">
+        <span class="ico">▦</span> 图片资产库
+      </button>
+      <button class="nav-item" data-view="models" disabled title="规划中">
+        <span class="ico">◈</span> 标准型号管理
+        <span class="tag">规划中</span>
+      </button>
+
+      <div class="nav-group">支持</div>
+      <a class="nav-item" href="/docs" target="_blank" rel="noopener">
+        <span class="ico">◇</span> 接口文档
+      </a>
+      <button class="nav-item" data-view="info">
+        <span class="ico">ⓘ</span> 系统基础信息
+      </button>
+    </nav>
+
+    <div class="sidebar-foot">
+      <div class="foot-row"><span>版本</span><b>V0.3.1</b></div>
+      <div class="foot-row"><span>数据源</span><b>飞书 · 盖亚</b></div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="menu-btn" id="menuBtn" aria-label="菜单">☰</button>
+      <div class="titles">
+        <h1 id="pageTitle">图片资产库</h1>
+        <p id="pageSub">白底图 · 按品牌 / 型号 / 颜色检索</p>
+      </div>
+      <div class="topbar-right">
+        <input id="q" type="search" placeholder="搜索品牌、型号或颜色" autocomplete="off">
+      </div>
+    </header>
+
+    <section class="view" id="view-library">
+      <div class="stats" id="stats">
+        <div class="stat"><span class="stat-label">图片总量</span><b id="s-total">—</b><span class="stat-hint" id="s-bytes"></span></div>
+        <div class="stat"><span class="stat-label">已关联型号</span><b id="s-models">—</b><span class="stat-hint">标准型号</span></div>
+        <div class="stat"><span class="stat-label">待处理</span><b id="s-pending">—</b><span class="stat-hint">需人工确认</span></div>
+        <div class="stat"><span class="stat-label">品牌数</span><b id="s-brands">—</b><span class="stat-hint">原始目录品牌</span></div>
+      </div>
+
+      <div class="filters">
+        <select id="brand"><option value="">全部品牌</option></select>
+        <select id="color"><option value="">全部颜色</option></select>
+        <select id="status">
+          <option value="">全部状态</option>
+          <option value="已匹配">已匹配</option>
+          <option value="待处理">待处理</option>
+          <option value="未匹配">未匹配</option>
+        </select>
+        <button id="reset" class="btn ghost">重置</button>
+        <span class="result-count" id="count"></span>
+      </div>
+
+      <div class="grid" id="grid"></div>
+      <div class="more-wrap"><button id="more" class="btn" hidden>加载更多</button></div>
+      <div class="empty" id="empty" hidden>没有匹配的图片</div>
+    </section>
+
+    <section class="view" id="view-info" hidden>
+      <div class="panel">
+        <h2>系统基础信息</h2>
+        <dl class="info-list" id="infoList"></dl>
+      </div>
+      <div class="panel">
+        <h2>接口一览</h2>
+        <table class="api-table">
+          <thead><tr><th>接口</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td><code>GET /api/v1/images</code></td><td>图片列表，支持品牌 / 型号 / 颜色 / 状态筛选与分页</td></tr>
+            <tr><td><code>GET /api/v1/images/{id}</code></td><td>单张图片详情</td></tr>
+            <tr><td><code>GET /api/v1/images/{id}/file</code></td><td>原图，加 <code>?w=320</code> 返回缩略图</td></tr>
+            <tr><td><code>GET /api/v1/images/{id}/download</code></td><td>下载，使用标准文件名</td></tr>
+            <tr><td><code>GET /api/v1/images-facets</code></td><td>品牌 / 颜色 / 状态聚合</td></tr>
+            <tr><td><code>GET /docs</code></td><td>OpenAPI 文档</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="view" id="view-models" hidden>
+      <div class="placeholder">
+        <h2>标准型号管理</h2>
+        <p>该模块尚未实现，当前仅预留入口。</p>
+        <p class="muted">现有能力：图片已关联到标准品牌与型号；型号本身的增删改、别名维护尚未开放界面。</p>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="drawer-mask" id="mask" hidden></div>
+<aside class="drawer" id="drawer" hidden aria-label="图片详情">
+  <div class="drawer-head">
+    <div class="d-title">
+      <h3 id="d-model">—</h3>
+      <div class="d-sub"><span id="d-brand">—</span><span id="d-status" class="badge">—</span></div>
+    </div>
+    <button class="close" id="d-close" aria-label="关闭">×</button>
+  </div>
+  <div class="drawer-img"><img id="d-img" alt=""></div>
+  <dl class="kv" id="d-kv"></dl>
+  <div class="drawer-actions">
+    <a id="d-download" class="btn primary" href="#" download>下载原图</a>
+    <a id="d-open" class="btn ghost" href="#" target="_blank" rel="noopener">新窗口打开</a>
+  </div>
+  <div class="share-row">
+    <input id="d-share" class="share-input" type="text" readonly aria-label="图片分享链接">
+    <button id="d-copy" class="btn ghost" type="button">复制图片链接</button>
+  </div>
+</aside>
+
+<div class="toast" id="toast" hidden role="status" aria-live="polite"></div>
+
+<script src="/static/app.js?v=20261105b"></script>
+</body>
+</html>
