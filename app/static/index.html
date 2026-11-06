@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>商品图库 · 图片资产库</title>
-<link rel="stylesheet" href="/static/app.css?v=20261106a">
+<link rel="stylesheet" href="/static/app.css?v=20261106b">
 </head>
 <body>
 <div class="app">
@@ -38,7 +38,7 @@
     </nav>
 
     <div class="sidebar-foot">
-      <div class="foot-row"><span>版本</span><b>V0.3.2</b></div>
+      <div class="foot-row"><span>版本</span><b>V0.3.3</b></div>
       <div class="foot-row"><span>数据源</span><b>飞书 · 盖亚</b></div>
     </div>
   </aside>
@@ -64,8 +64,23 @@
       </div>
 
       <div class="filters">
-        <select id="group" aria-label="品牌组"><option value="">全部品牌组</option></select>
-        <select id="brand" aria-label="品牌"><option value="">全部品牌</option></select>
+        <div class="combo" id="brandCombo">
+          <button type="button" class="combo-btn" id="brandBtn"
+                  aria-haspopup="listbox" aria-expanded="false" aria-controls="brandPanel">
+            <span class="combo-prefix">品牌</span>
+            <span class="combo-text" id="brandLabel">全部品牌</span>
+            <span class="combo-caret" aria-hidden="true"></span>
+          </button>
+          <div class="combo-panel combo-panel-wide" id="brandPanel" hidden>
+            <input id="brandSearch" class="combo-search" type="search"
+                   placeholder="搜索品牌，例如：努比亚 / iQOO / nubia" autocomplete="off"
+                   aria-label="搜索品牌" role="combobox" aria-expanded="true"
+                   aria-controls="brandList" aria-autocomplete="list">
+            <ul class="combo-list combo-list-tree" id="brandList" role="listbox" aria-label="品牌"></ul>
+            <div class="combo-empty" id="brandEmpty" hidden>没有匹配的品牌，试试「华为」「努比亚」或英文名</div>
+            <div class="combo-foot" id="brandScope">品牌组与独立品牌 · 数字为图片张数</div>
+          </div>
+        </div>
 
         <div class="combo" id="colorCombo">
           <button type="button" class="combo-btn" id="colorBtn"
@@ -112,6 +127,7 @@
             <tr><td><code>GET /api/v1/images/{id}/file</code></td><td>原图，加 <code>?w=320</code> 返回缩略图</td></tr>
             <tr><td><code>GET /api/v1/images/{id}/download</code></td><td>下载，使用标准文件名</td></tr>
             <tr><td><code>GET /api/v1/images-facets</code></td><td>品牌组 / 品牌 / 颜色 / 状态聚合，计数随筛选上下文实时计算</td></tr>
+            <tr><td><code>GET /api/v1/brand-tree</code></td><td>统一品牌选择器数据：品牌组（含子品牌）与独立品牌</td></tr>
             <tr><td><code>GET /docs</code></td><td>OpenAPI 文档</td></tr>
           </tbody>
         </table>
@@ -152,6 +168,6 @@
 
 <div class="toast" id="toast" hidden role="status" aria-live="polite"></div>
 
-<script src="/static/app.js?v=20261106a"></script>
+<script src="/static/app.js?v=20261106b"></script>
 </body>
 </html>
