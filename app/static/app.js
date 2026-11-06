@@ -1,9 +1,13 @@
-/* 商品图库 · 前端主逻辑（V0.3.2 筛选器） */
+/* 商品图库 · 前端主逻辑（V0.3.3 统一品牌选择器） */
 
 const state = {
   offset: 0, limit: 48, total: 0, loading: false, view: 'library',
   color: '',            // 颜色改由自定义下拉维护，不再依赖 <select>
   facets: null,
+  tree: null,           // 统一品牌选择器的数据（组 + 子品牌 + 独立品牌）
+  brand: { kind: 'all', id: '', value: '', label: '全部品牌' },
+  brandActive: -1,      // 品牌面板内键盘高亮行
+  collapsed: new Set(), // 已折叠的品牌组 id
   seq: 0,               // 每次筛选变更递增，用于丢弃过期的响应
 };
 
@@ -93,12 +97,13 @@ async function loadInfo() {
 
 /* ---------- 筛选器 ---------- */
 
-/** 当前筛选条件；品牌组与品牌是两级，颜色单独存在 state。 */
+/** 当前筛选条件；品牌由统一选择器维护，选中子品牌时不再携带品牌组。 */
 function currentFilters() {
+  const b = state.brand;
   return {
     q: ($('q')?.value || '').trim(),
-    group: $('group')?.value || '',
-    brand: $('brand')?.value || '',
+    group: b.kind === 'group' ? b.id : '',
+    brand: b.kind === 'brand' ? b.value : '',
     color: state.color,
     status: $('status')?.value || '',
   };
@@ -122,28 +127,200 @@ async function fetchFacets() {
   }
 }
 
-/** 品牌组下拉：计数来自服务端全量统计，切换品牌组时清空品牌与颜色。 */
-function renderGroups(d, f) {
-  const el = $('group');
-  if (!el) return;
-  el.innerHTML = '<option value="">全部品牌组</option>'
-    + d.groups.map((g) => `<option value="${esc(g.id)}"${g.count === 0 && g.id !== f.group ? ' disabled' : ''}>`
-      + `${esc(g.label)}（${fmtNum(g.count)}）</option>`).join('');
-  el.value = f.group;
+/* ---------- 品牌：统一选择器（品牌组 + 子品牌 + 独立品牌） ---------- */
+
+async function fetchTree() {
+  const f = currentFilters();
+  const p = new URLSearchParams();
+  if (f.q) p.set('q', f.q);
+  if (f.status) p.set('status', f.status);
+  try {
+    const r = await fetch('/api/v1/brand-tree?' + p.toString());
+    return r.ok ? await r.json() : null;
+  } catch (e) {
+    return null;
+  }
 }
 
-/** 品牌下拉：只列当前品牌组范围内的子品牌；华为、荣耀等独立品牌在"全部品牌组"下平铺。 */
-function renderBrands(d, f) {
-  const el = $('brand');
-  if (!el) return;
-  const exists = d.brands.some((b) => b.value === f.brand);
-  if (f.brand && !exists) {
-    // 数据里已不存在该品牌（例如切到别的品牌组），一并清掉颜色，避免残留
-    state.color = '';
+// 明确且有限的别名表，只用于搜索命中，不做模糊推断
+const BRAND_ALIAS = {
+  '小米': ['xiaomi', 'mi'], 'xiaomi': ['小米', 'mi'], '小米系': ['xiaomi'],
+  'redmi': ['红米'], '红米': ['redmi'],
+  'vivo': [], 'vivo系': [],
+  'iqoo': ['爱酷'],
+  'oppo': [], 'oppo系': [],
+  '一加': ['oneplus'], 'oneplus': ['一加'],
+  '真我': ['realme'], 'realme': ['真我'],
+  '华为': ['huawei'], 'huawei': ['华为'],
+  '荣耀': ['honor'], 'honor': ['荣耀'],
+  '三星': ['samsung'], 'samsung': ['三星'],
+  'apple': ['苹果', 'iphone'], '苹果': ['apple', 'iphone'],
+  '努比亚': ['nubia'], 'nubia': ['努比亚'],
+};
+
+const normText = (s) => String(s ?? '').normalize('NFKC').toLowerCase().replace(/\s+/g, '');
+
+function matchesQuery(name, q) {
+  if (!q) return true;
+  if (normText(name).includes(q)) return true;
+  const alias = BRAND_ALIAS[String(name || '').toLowerCase()] || [];
+  return alias.some((a) => normText(a).includes(q));
+}
+
+/** 生成面板行：无搜索时按层级展示（组可折叠），搜索时跨组平铺。 */
+function brandRows(q) {
+  const t = state.tree;
+  const rows = [];
+  if (!t) return rows;
+  if (!q) rows.push({ kind: 'all', label: '全部品牌', count: t.total, level: 0 });
+  for (const g of t.groups) {
+    const kids = g.brands.filter((b) => matchesQuery(b.value, q));
+    const gMatch = matchesQuery(g.label, q);
+    if (q) {
+      // 搜索时只有组名本身命中才显示组行；否则只列出命中的子品牌，
+      // 避免「搜 Redmi，回车却选中整个小米系」这种反直觉结果
+      if ((!gMatch && !kids.length) || g.count === 0) continue;
+      if (gMatch) {
+        rows.push({ kind: 'group', id: g.id, label: `${g.label} · 全部`, count: g.count, level: 0 });
+      }
+      for (const b of (gMatch ? g.brands : kids)) {
+        if (b.count > 0) {
+          rows.push({ kind: 'brand', value: b.value, count: b.count, level: 1, parent: q ? g.label : '' });
+        }
+      }
+    } else {
+      if (g.count === 0) continue;
+      const open = !state.collapsed.has(g.id);
+      rows.push({ kind: 'group', id: g.id, label: `${g.label} · 全部`, count: g.count, level: 0, open });
+      if (open) {
+        for (const b of g.brands) {
+          if (b.count === 0) continue;
+          // 树形模式靠缩进表达层级，不再重复标注父组
+          rows.push({ kind: 'brand', value: b.value, count: b.count, level: 1 });
+        }
+      }
+    }
   }
-  el.innerHTML = '<option value="">全部品牌</option>'
-    + d.brands.map((b) => `<option value="${esc(b.value)}">${esc(b.value)}（${fmtNum(b.count)}）</option>`).join('');
-  el.value = exists ? f.brand : '';
+  const stand = t.standalone.filter((b) => matchesQuery(b.value, q) && b.count > 0);
+  if (stand.length) {
+    rows.push({ kind: 'header', label: '独立品牌', level: 0 });
+    for (const b of stand) rows.push({ kind: 'brand', value: b.value, count: b.count, level: 0 });
+  }
+  return rows;
+}
+
+function isSelected(row) {
+  const b = state.brand;
+  if (row.kind === 'all') return b.kind === 'all';
+  if (row.kind === 'group') return b.kind === 'group' && b.id === row.id;
+  if (row.kind === 'brand') return b.kind === 'brand' && b.value === row.value;
+  return false;
+}
+
+function renderBrandList(query) {
+  const ul = $('brandList');
+  const empty = $('brandEmpty');
+  if (!ul) return;
+  const q = normText(query);
+  const rows = brandRows(q);
+  const items = [];
+  ul.innerHTML = rows.map((r) => {
+    if (r.kind === 'header') {
+      return `<li class="combo-sec" role="presentation">${esc(r.label)}</li>`;
+    }
+    const idx = items.push(r) - 1;
+    const on = isSelected(r) ? ' on' : '';
+    const act = idx === state.brandActive ? ' active' : '';
+    const toggle = (r.kind === 'group' && !q)
+      ? `<span class="tw${r.open ? ' open' : ''}" data-toggle="${esc(r.id)}"></span>`
+      : '<span class="tw"></span>';
+    const parent = r.parent ? `<span class="ci-parent">${esc(r.parent)}</span>` : '';
+    const name = r.kind === 'brand' ? r.value : r.label;
+    const attr = r.kind === 'group' ? ` data-id="${esc(r.id)}"`
+      : (r.kind === 'brand' ? ` data-value="${esc(r.value)}"` : '');
+    return `<li class="combo-item lv${r.level}${on}${act}" role="option" data-kind="${r.kind}"${attr}
+        aria-selected="${isSelected(r) ? 'true' : 'false'}">${toggle}
+        <span class="ci-name">${esc(name)}</span>${parent}<span class="ci-num">${fmtNum(r.count)}</span></li>`;
+  }).join('');
+
+  state.brandItems = items;
+  if (empty) empty.hidden = items.length > 0;
+  const scope = $('brandScope');
+  if (scope && state.tree) {
+    const nBrands = state.tree.groups.reduce((s, g) => s + g.brands.length, 0)
+      + state.tree.standalone.length;
+    scope.textContent = `${state.tree.groups.length} 个品牌组 · ${nBrands} 个品牌 · 数字为图片张数`;
+  }
+}
+
+function updateBrandLabel() {
+  const el = $('brandLabel');
+  const btn = $('brandBtn');
+  if (!el) return;
+  const label = state.brand.label || '全部品牌';
+  el.textContent = label;
+  el.title = label;
+  if (btn) btn.classList.toggle('has-value', state.brand.kind !== 'all');
+}
+
+/** 面板定位：下方空间不足时向上展开，并按可用高度收缩列表，保证整块都在视口内。 */
+function positionBrandPanel() {
+  const btn = $('brandBtn');
+  const panel = $('brandPanel');
+  const list = $('brandList');
+  if (!btn || !panel || panel.hidden) return;
+  const r = btn.getBoundingClientRect();
+  const below = window.innerHeight - r.bottom - 16;
+  const above = r.top - 16;
+  const up = below < 300 && above > below;
+  panel.classList.toggle('up', up);
+  if (list) list.style.maxHeight = Math.min(492, Math.max(200, (up ? above : below) - 96)) + 'px';
+}
+
+function openBrandPanel() {
+  const panel = $('brandPanel');
+  if (!panel) return;
+  closeColorPanel();
+  panel.hidden = false;
+  $('brandBtn')?.setAttribute('aria-expanded', 'true');
+  $('brandCombo')?.classList.add('open');
+  const s = $('brandSearch');
+  if (s) s.value = '';
+  state.brandActive = -1;
+  renderBrandList('');
+  positionBrandPanel();
+  s?.focus();
+  const on = $('brandList')?.querySelector('.combo-item.on');
+  if (on) on.scrollIntoView({ block: 'nearest' });
+}
+
+function closeBrandPanel() {
+  const panel = $('brandPanel');
+  if (!panel || panel.hidden) return;
+  panel.hidden = true;
+  $('brandBtn')?.setAttribute('aria-expanded', 'false');
+  $('brandCombo')?.classList.remove('open');
+  state.brandActive = -1;
+}
+
+function paintBrandActive() {
+  const ul = $('brandList');
+  if (!ul) return;
+  const els = [...ul.querySelectorAll('.combo-item')];
+  els.forEach((el, i) => el.classList.toggle('active', i === state.brandActive));
+  if (state.brandActive >= 0 && els[state.brandActive]) {
+    els[state.brandActive].scrollIntoView({ block: 'nearest' });
+  }
+}
+
+/** 选定品牌：清空颜色（范围变了），关闭面板并按新条件刷新。 */
+function selectBrand(row) {
+  if (row.kind === 'all') state.brand = { kind: 'all', id: '', value: '', label: '全部品牌' };
+  else if (row.kind === 'group') state.brand = { kind: 'group', id: row.id, value: '', label: row.label };
+  else state.brand = { kind: 'brand', id: '', value: row.value, label: row.value };
+  state.color = '';
+  closeBrandPanel();
+  refreshAll();
 }
 
 /* ---------- 颜色：可搜索下拉 ---------- */
@@ -300,19 +477,17 @@ async function load(reset = false, seq = state.seq) {
   }
 }
 
-/** 统一的刷新入口：先按新条件重算聚合，再按同一条件取列表，避免两者口径不一致。 */
+/** 统一的刷新入口：先按新条件重算聚合与品牌树，再按同一条件取列表，避免口径不一致。 */
 async function refreshAll(reset = true) {
   const seq = ++state.seq;
   closeColorPanel();
-  const d = await fetchFacets();
-  if (seq !== state.seq) return;
-  if (d) {
-    state.facets = d;
-    const f = currentFilters();
-    renderGroups(d, f);
-    renderBrands(d, f);
-    renderColors(f);
-  }
+  closeBrandPanel();
+  const [d, t] = await Promise.all([fetchFacets(), fetchTree()]);
+  if (seq !== state.seq) return;        // 期间又改了筛选，丢弃这批过期响应
+  if (d) state.facets = d;
+  if (t) state.tree = t;
+  updateBrandLabel();
+  renderColors(currentFilters());
   await load(reset, seq);
 }
 
@@ -470,27 +645,18 @@ bind('q', 'input', () => {
   debounce = setTimeout(() => refreshAll(), 280);
 });
 
-// 切换品牌组：品牌与颜色都属于该组范围内的结果，一并清空，避免跨组残留
-bind('group', 'change', () => {
-  const b = $('brand');
-  if (b) b.value = '';
-  state.color = '';
-  refreshAll();
-});
-
-// 切换品牌：重置已选颜色（颜色只在当前品牌范围内有意义）
-bind('brand', 'change', () => {
-  state.color = '';
-  refreshAll();
-});
-
+// 品牌选择器在 selectBrand() 内统一处理：切品牌会清空颜色并重新取树
 bind('status', 'change', () => refreshAll());
 
 bind('reset', 'click', () => {
-  ['q', 'group', 'brand', 'status'].forEach((id) => { const el = $(id); if (el) el.value = ''; });
+  ['q', 'status'].forEach((id) => { const el = $(id); if (el) el.value = ''; });
+  state.brand = { kind: 'all', id: '', value: '', label: '全部品牌' };
   state.color = '';
-  const s = $('colorSearch');
-  if (s) s.value = '';
+  state.collapsed.clear();
+  const cs = $('colorSearch');
+  if (cs) cs.value = '';
+  const bs = $('brandSearch');
+  if (bs) bs.value = '';
   refreshAll();
 });
 
@@ -500,12 +666,13 @@ bind('d-copy', 'click', copyShareLink);
 bind('d-share', 'focus', (e) => e.target.select());   // 聚焦即全选，便于手动复制
 bind('mask', 'click', closeDrawer);
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') { closeColorPanel(); closeDrawer(); }
+  if (e.key === 'Escape') { closeColorPanel(); closeBrandPanel(); closeDrawer(); }
 });
 document.querySelectorAll('.nav-item[data-view]').forEach((b) => {
   b.addEventListener('click', () => { if (!b.disabled) switchView(b.dataset.view); });
 });
 bind('menuBtn', 'click', () => $('sidebar')?.classList.toggle('open'));
+window.addEventListener('resize', positionBrandPanel);
 
 /* 颜色下拉交互：搜索、点击选择、键盘上下与回车、点外部关闭 */
 bind('colorBtn', 'click', () => {
@@ -521,12 +688,64 @@ bind('colorSearch', 'keydown', (e) => {
   }
 });
 bind('colorList', 'click', (e) => {
+  e.stopPropagation();
   const li = e.target.closest('.combo-item');
   if (li) setColor(li.dataset.value || '');
 });
 bind('colorList', 'mousedown', (e) => e.preventDefault());   // 保持搜索框焦点
 document.addEventListener('click', (e) => {
+  if (!e.target.isConnected) return;   // 目标已被重渲染移除，视为面板内操作
   if (!e.target.closest('#colorCombo')) closeColorPanel();
+});
+
+/* 品牌选择器：点击展开、搜索、方向键/回车、组折叠、点外部关闭 */
+bind('brandBtn', 'click', () => {
+  const panel = $('brandPanel');
+  if (panel?.hidden) openBrandPanel(); else closeBrandPanel();
+});
+bind('brandSearch', 'input', (e) => {
+  state.brandActive = -1;
+  renderBrandList(e.target.value);
+});
+bind('brandSearch', 'keydown', (e) => {
+  const rows = state.brandItems || [];
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (!rows.length) return;
+    const step = e.key === 'ArrowDown' ? 1 : -1;
+    state.brandActive = (state.brandActive + step + rows.length) % rows.length;
+    paintBrandActive();
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    const row = rows[state.brandActive] || rows[0];
+    if (row) selectBrand(row);
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    closeBrandPanel();
+    $('brandBtn')?.focus();
+  }
+});
+bind('brandList', 'click', (e) => {
+  e.stopPropagation();       // 列表内点击会重渲染，事件目标随即脱离 DOM，不能让它冒泡去关面板
+  const tw = e.target.closest('.tw[data-toggle]');
+  if (tw) {                                  // 折叠/展开品牌组，不改变筛选
+    const id = tw.dataset.toggle;
+    if (state.collapsed.has(id)) state.collapsed.delete(id); else state.collapsed.add(id);
+    renderBrandList($('brandSearch')?.value || '');
+    return;
+  }
+  const li = e.target.closest('.combo-item');
+  if (!li) return;
+  const idx = [...$('brandList').querySelectorAll('.combo-item')].indexOf(li);
+  const row = (state.brandItems || [])[idx];
+  if (row) selectBrand(row);
+});
+bind('brandList', 'mousedown', (e) => {
+  if (!e.target.closest('.tw[data-toggle]')) e.preventDefault();   // 保持搜索框焦点
+});
+document.addEventListener('click', (e) => {
+  if (!e.target.isConnected) return;
+  if (!e.target.closest('#brandCombo')) closeBrandPanel();
 });
 
 /* ---------- 启动 ---------- */

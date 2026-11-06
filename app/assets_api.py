@@ -78,6 +78,12 @@ def brand_variants(keys) -> tuple[str, ...]:
     return tuple(sorted(variants))
 
 
+def brand_key_of(value: str) -> str:
+    """把展示品牌名归一到品牌键（Redmi→redmi、一加→oneplus）。"""
+    key = (value or "").strip().casefold()
+    return BRAND_ALIASES.get(key, key)
+
+
 def build_where(q: str = "", model: str = "", status: str = "",
                 group: str = "", brand: str = "", color: str = "") -> tuple[str, list]:
     """把筛选条件拼成 WHERE 子句；品牌组与子品牌同时给出时按 AND 处理（精确优先）。"""
@@ -226,6 +232,47 @@ def facets(
     return {"groups": groups, "brands": brands, "colors": colors, "statuses": statuses,
             "color_base": color_base,
             "total": stats[0], "total_bytes": stats[1]}
+
+
+@router.get("/brand-tree")
+def brand_tree(q: str = "", status: str = ""):
+    """统一品牌选择器的数据源：品牌组（含子品牌）+ 独立品牌。
+
+    V0.3.3 新增，纯新增接口，不影响 /images-facets 的既有契约。
+    计数口径 = 搜索词 + 匹配状态，即「现在点它会有多少张」，全部走 SQL 聚合，与分页无关；
+    同一品牌的多种写法（如 Redmi/REDMI）按归一键合并。
+
+    刻意不按颜色收敛：颜色在换品牌时会被清空，若品牌列表也跟着颜色收缩，
+    用户就看不到其他品牌了——这与「不懂分组也能找到任意品牌」的目标相反。
+    """
+    clause, args = build_where(q=q, status=status)
+    with db() as conn:
+        total = conn.execute(
+            f"select count(*) from image_assets{clause}", args).fetchone()[0]
+        rows = conn.execute(
+            f"""select {BRAND_EXPR} v, lower({BRAND_EXPR}) k, count(*) c
+                from image_assets{clause}
+                {"and" if clause else "where"} {BRAND_EXPR} <> ''
+                group by k, v""", args).fetchall()
+
+    merged: dict[str, tuple[str, int]] = {}
+    for value, key, count in rows:
+        k = BRAND_ALIASES.get(key, key)
+        name, n = merged.get(k, (value, 0))
+        merged[k] = (value if count > n else name, n + count)
+
+    groups = []
+    for spec in BRAND_GROUPS:
+        kids = [{"value": merged[k][0], "count": merged[k][1]}
+                for k in spec["keys"] if k in merged]
+        kids.sort(key=lambda x: (-x["count"], x["value"]))
+        groups.append({"id": spec["id"], "label": spec["label"],
+                       "count": sum(x["count"] for x in kids), "brands": kids})
+
+    grouped = {k for spec in BRAND_GROUPS for k in spec["keys"]}
+    standalone = sorted(({"value": v[0], "count": v[1]} for k, v in merged.items() if k not in grouped),
+                        key=lambda x: (-x["count"], x["value"]))
+    return {"total": total, "groups": groups, "standalone": standalone}
 
 
 @router.get("/images-overview")

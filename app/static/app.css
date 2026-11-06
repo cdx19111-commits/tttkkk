@@ -251,6 +251,55 @@ select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(47,111,23
   color: var(--ink-3); font-size: 11.5px; line-height: 1.5;
 }
 
+/* ---------- 品牌：统一选择器（组 + 子品牌 + 独立品牌） ---------- */
+
+.combo-prefix {
+  flex: 0 0 auto; margin-right: 7px; padding-right: 7px;
+  border-right: 1px solid var(--line-soft);
+  color: var(--ink-3); font-size: 12px;
+}
+#brandCombo .combo-btn { min-width: 164px; max-width: 210px; }
+#brandCombo .combo-btn.has-value .combo-prefix { color: var(--accent); }
+
+.combo-panel-wide { width: 340px; }
+.combo-panel.up { top: auto; bottom: calc(100% + 6px); }
+/* 展开态一屏放下 16 行（全部品牌 + 3 组 + 6 子品牌 + 独立品牌 5）；矮屏自动收窄并滚动 */
+.combo-list-tree { max-height: min(492px, calc(100vh - 300px)); }
+.combo-list-tree .combo-item { padding: 4px 8px; }
+
+.combo-sec {
+  margin: 8px 0 2px; padding: 0 8px;
+  font-size: 11px; letter-spacing: .6px; color: var(--ink-3);
+}
+.combo-item.lv1 { padding-left: 26px; }
+.combo-item.lv1 .ci-name { color: var(--ink-2); font-weight: 400; }
+.combo-item.lv1.on .ci-name { color: var(--accent-dark); font-weight: 600; }
+
+/* 折叠箭头：只有品牌组行带 data-toggle 才显示 */
+.tw {
+  flex: 0 0 12px; width: 12px; height: 12px;
+  position: relative; cursor: pointer;
+}
+.tw::before {
+  content: ''; position: absolute; left: 3px; top: 3px;
+  border-left: 4.5px solid #8a95a6;
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+  transition: transform .15s ease;
+}
+.tw.open::before { transform: rotate(90deg); }
+.tw:not([data-toggle]) { cursor: default; }
+.tw:not([data-toggle])::before { display: none; }
+
+.ci-parent {
+  flex: 0 0 auto; margin-left: 5px; padding: 0 5px;
+  font-size: 10.5px; line-height: 16px;
+  color: var(--ink-3); background: #f4f6fa; border-radius: 4px;
+}
+
+.combo-item.active { background: #e9f1fd; }
+.combo-item.on.active { background: rgba(47,111,237,.16); }
+
 
 .btn {
   height: 34px; padding: 0 14px;
@@ -489,7 +538,12 @@ code {
   .filters select { flex: 1 1 calc(50% - 8px); min-width: 0; }
   .filters .combo { flex: 1 1 calc(50% - 8px); min-width: 0; }
   .filters .combo-btn { width: 100%; max-width: none; }
+  #brandCombo .combo-btn { min-width: 0; }
   .combo-panel { width: min(320px, calc(100vw - 44px)); }
+  .combo-panel-wide { width: min(360px, calc(100vw - 32px)); }
+  /* 触屏需要更大点击热区，面板内部滚动即可 */
+  .combo-list-tree .combo-item { padding: 8px; }
+  .combo-list-tree .combo-item.lv1 { padding-left: 26px; }
   .filters .btn { flex: 0 0 auto; }
   .result-count { width: 100%; margin-left: 0; }
 }
