@@ -124,7 +124,7 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
                                 headers={"Cache-Control": "no-store"})
 
 
-app = FastAPI(title="商品图片资产库", version="0.3.4",
+app = FastAPI(title="商品图片资产库", version="0.3.5",
               docs_url=None, redoc_url=None, openapi_url=None)
 app.add_middleware(SessionAuthMiddleware)
 app.include_router(images_router)
