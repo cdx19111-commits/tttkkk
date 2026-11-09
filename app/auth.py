@@ -6,6 +6,9 @@
 - 会话是**服务端**记录，落在独立 SQLite（默认 runtime/sessions.db），
   不碰业务库 gallery.db；Cookie 里只有随机令牌，库里只存令牌的 SHA-256。
 - Cookie：HttpOnly + Secure + SameSite=Lax + Path=/ + Max-Age=7 天，不设 Domain（仅本站）。
+- V0.3.5：会话绑定凭据版本（auth_epoch = 口令哈希的 SHA-256 前 16 位）。
+  口令轮换后哈希变化 → 版本变化 → 所有旧会话在下次校验时立即失效并被删除；
+  旧版会话行没有该字段（NULL），NULL 不等于任何版本，因此不会绕过校验。
 """
 from __future__ import annotations
 
@@ -79,6 +82,18 @@ def hash_configured() -> bool:
     return bool(PASSWORD_HASH)
 
 
+def credential_epoch() -> str:
+    """当前凭据版本，取口令哈希的 SHA-256 前 16 位。
+
+    - 哈希里已含随机盐，所以每次轮换口令（甚至用同口令重设）都会得到新版本；
+    - 版本只由哈希推导，不额外存明文，也不需要人工维护；
+    - 哈希未配置时返回空串，此时任何会话都不应通过校验。
+    """
+    if not PASSWORD_HASH:
+        return ""
+    return hashlib.sha256(PASSWORD_HASH.encode("utf-8")).hexdigest()[:16]
+
+
 # ---------- 会话存储 ----------
 
 def _connect() -> sqlite3.Connection:
@@ -92,12 +107,14 @@ def _connect() -> sqlite3.Connection:
 
 def init_store() -> None:
     with _connect() as conn:
+        # auth_epoch 记录建会话时的凭据版本（V0.3.5 新增）
         conn.execute("""create table if not exists sessions(
             sid text primary key,           -- 令牌的 sha256，库里不存原文令牌
             created_at integer not null,
             expires_at integer not null,
             last_seen integer not null,
-            ip text, ua text)""")
+            ip text, ua text,
+            auth_epoch text)""")
         conn.execute("""create table if not exists login_attempts(
             id integer primary key autoincrement,
             ip text not null,
@@ -105,6 +122,7 @@ def init_store() -> None:
             ok integer not null)""")
         conn.execute("create index if not exists idx_attempts_ip on login_attempts(ip, ts)")
         conn.execute("create index if not exists idx_sessions_exp on sessions(expires_at)")
+        _migrate_epoch_column(conn)
     # 会话库仅服务进程可读写（容器内为 root，宿主侧同为 root）
     try:
         os.chmod(SESSION_DB, 0o600)
@@ -116,31 +134,58 @@ def init_store() -> None:
         pass
 
 
+def _migrate_epoch_column(conn: sqlite3.Connection) -> None:
+    """给 V0.3.4 及更早的会话表补 auth_epoch 列。
+
+    刻意**不回填**：旧行保持 NULL，而校验要求与当前版本严格相等，
+    因此升级瞬间所有旧会话即失效，不存在"缺字段就跳过校验"的旁路。
+    列可为空（alter table 不能加 not null 到已有数据），
+    回滚到旧镜像时其 insert 不带该列也能正常写入。
+    """
+    cols = {row["name"] for row in conn.execute("pragma table_info(sessions)")}
+    if "auth_epoch" not in cols:
+        conn.execute("alter table sessions add column auth_epoch text")
+        legacy = conn.execute(
+            "select count(*) c from sessions where auth_epoch is null").fetchone()["c"]
+        print(f"[auth] sessions 表已补充 auth_epoch 列；{legacy} 条旧会话将失效", flush=True)
+
+
+
 def _sid(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def create_session(ip: str = "", ua: str = "") -> str:
-    """新建会话，返回明文令牌（仅用于写入 Cookie）。"""
+    """新建会话，返回明文令牌（仅用于写入 Cookie）。会话绑定当前凭据版本。"""
     token = secrets.token_urlsafe(32)
     now = int(time.time())
     with _connect() as conn:
         conn.execute("delete from sessions where expires_at <= ?", (now,))
         conn.execute(
-            "insert into sessions(sid, created_at, expires_at, last_seen, ip, ua) values (?,?,?,?,?,?)",
-            (_sid(token), now, now + SESSION_TTL, now, ip[:64], ua[:200]))
+            "insert into sessions(sid, created_at, expires_at, last_seen, ip, ua, auth_epoch)"
+            " values (?,?,?,?,?,?,?)",
+            (_sid(token), now, now + SESSION_TTL, now, ip[:64], ua[:200], credential_epoch()))
     return token
 
 
 def session_valid(token: str) -> bool:
     if not token:
         return False
+    current = credential_epoch()
+    if not current:                    # 未配置口令时一律不认会话
+        return False
     now = int(time.time())
     with _connect() as conn:
-        row = conn.execute("select expires_at from sessions where sid = ?", (_sid(token),)).fetchone()
+        row = conn.execute("select expires_at, auth_epoch from sessions where sid = ?",
+                           (_sid(token),)).fetchone()
         if not row:
             return False
         if row["expires_at"] <= now:
+            conn.execute("delete from sessions where sid = ?", (_sid(token),))
+            return False
+        # 凭据版本不一致（口令已轮换）或旧版行（NULL）→ 立即作废，不留残余
+        stored = row["auth_epoch"] or ""
+        if not hmac.compare_digest(stored.encode("utf-8"), current.encode("utf-8")):
             conn.execute("delete from sessions where sid = ?", (_sid(token),))
             return False
         conn.execute("update sessions set last_seen = ? where sid = ?", (now, _sid(token)))
@@ -157,6 +202,35 @@ def revoke_session(token: str) -> None:
 def count_sessions() -> int:
     with _connect() as conn:
         return conn.execute("select count(*) from sessions").fetchone()[0]
+
+
+def session_summary() -> dict:
+    """按凭据版本汇总会话，供运维核对（不含任何令牌信息）。"""
+    current = credential_epoch()
+    now = int(time.time())
+    with _connect() as conn:
+        rows = conn.execute(
+            "select auth_epoch, count(*) n, sum(expires_at > ?) alive from sessions"
+            " group by auth_epoch", (now,)).fetchall()
+    total = sum(r["n"] for r in rows)
+    stale = sum(r["n"] for r in rows if (r["auth_epoch"] or "") != current)
+    return {"total": total, "current_epoch": current,
+            "current": total - stale, "stale": stale,
+            "expired": sum(r["n"] - (r["alive"] or 0) for r in rows)}
+
+
+def purge_stale_sessions() -> int:
+    """删除凭据版本不符（含旧版 NULL）的会话，返回删除条数。
+
+    只动 sessions 表，不碰 login_attempts、不碰业务库；用于口令轮换后的收尾清理。
+    """
+    current = credential_epoch()
+    with _connect() as conn:
+        if not current:
+            return 0
+        cur = conn.execute(
+            "delete from sessions where auth_epoch is null or auth_epoch <> ?", (current,))
+        return cur.rowcount
 
 
 # ---------- 登录限速（V0.3.4 修复：短窗口 + 温和等待） ----------
