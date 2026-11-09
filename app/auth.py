@@ -159,35 +159,98 @@ def count_sessions() -> int:
         return conn.execute("select count(*) from sessions").fetchone()[0]
 
 
-# ---------- 登录限速 ----------
+# ---------- 登录限速（V0.3.4 修复：短窗口 + 温和等待） ----------
+#
+# 事故背景：旧策略「同一 IP 15 分钟内失败 5 次 → 整个窗口内全部拒绝」，
+# 在多人共享出口 IP 的场景下等于让所有同事一起等 10 分钟以上。
+#
+# 新策略：
+#   1) 口令正确 → 一定放行，并清空该 IP 的失败计数（不受他人错误影响）；
+#   2) 口令错误 → 401「账号或密码不正确」，首次错误绝不等待；
+#   3) 同一 IP 失败达 SOFT_FAILS 次后，每次错误只等十几秒（429 + Retry-After）；
+#   4) 同一 IP 失败达 HARD_FAILS 次 → 60 秒硬闸（此阶段不再做哈希计算，省 CPU）；
+#   5) 全局失败达 GLOBAL_FAILS 次 → 60 秒整体降速，防分布式撞库。
+
+FAIL_WINDOW = int(os.getenv("LOGIN_WINDOW", "600"))        # 统计窗口 10 分钟
+SOFT_FAILS = int(os.getenv("LOGIN_SOFT_FAILS", "5"))       # 达到即进入"每次要等"
+SOFT_WAIT = int(os.getenv("LOGIN_SOFT_WAIT", "15"))        # 单次等待上限（秒）
+HARD_FAILS = int(os.getenv("LOGIN_HARD_FAILS", "30"))      # 达到即硬闸
+HARD_WAIT = int(os.getenv("LOGIN_HARD_WAIT", "60"))        # 硬闸时长（秒）
+GLOBAL_FAILS = int(os.getenv("LOGIN_GLOBAL_FAILS", "200"))  # 全局熔断阈值
+
 
 def _prune_attempts(conn: sqlite3.Connection, now: int) -> None:
-    conn.execute("delete from login_attempts where ts < ?", (now - FAIL_WINDOW * 4,))
+    conn.execute("delete from login_attempts where ts < ?", (now - FAIL_WINDOW * 6,))
 
 
-def rate_limited(ip: str) -> int:
-    """返回 0 表示未限速；否则返回建议的 Retry-After 秒数。"""
+def _ip_fails(conn: sqlite3.Connection, ip: str, now: int) -> tuple[int, int]:
+    row = conn.execute(
+        "select count(*) c, min(ts) t from login_attempts where ip = ? and ok = 0 and ts > ?",
+        (ip, now - FAIL_WINDOW)).fetchone()
+    return row["c"], (row["t"] or now)
+
+
+def soft_delay(ip: str) -> int:
+    """错误口令在软阈值之后需要等待的秒数；0 表示无需等待。"""
     now = int(time.time())
     with _connect() as conn:
-        _prune_attempts(conn, now)
-        row = conn.execute(
-            "select count(*) c, min(ts) t from login_attempts where ip = ? and ok = 0 and ts > ?",
-            (ip, now - FAIL_WINDOW)).fetchone()
-        if row["c"] >= FAIL_LIMIT:
-            return max(30, FAIL_WINDOW - (now - row["t"]))
-        total = conn.execute(
-            "select count(*) c from login_attempts where ok = 0 and ts > ?",
-            (now - FAIL_WINDOW,)).fetchone()["c"]
-        if total >= GLOBAL_FAIL_LIMIT:
-            return 300          # 全局熔断：明显有分布式撞库时整体降速
+        count, first = _ip_fails(conn, ip, now)
+    if count <= SOFT_FAILS:      # 前 SOFT_FAILS 次只是普通「密码错误」，不要求等待
+        return 0
+    remain = max(1, FAIL_WINDOW - (now - first))
+    return max(1, min(SOFT_WAIT, remain))
+
+
+def hard_block(ip: str) -> int:
+    """硬闸秒数；0 表示不拦。
+
+    触发条件：同一 IP 在窗口内失败达到 HARD_FAILS。
+    触发时清空该 IP 的失败计数并打时间标记，HARD_WAIT 秒后自动解除——
+    是"短暂冷却"，不是"锁到统计窗口结束"。
+    """
+    now = int(time.time())
+    with _connect() as conn:
+        mark = conn.execute(
+            "select max(ts) t from login_attempts where ip = ? and ok = 2 and ts > ?",
+            (ip[:64], now - HARD_WAIT)).fetchone()
+        if mark and mark["t"]:
+            return max(1, HARD_WAIT - (now - mark["t"]))
+        count, _ = _ip_fails(conn, ip, now)
+        if count >= HARD_FAILS:
+            conn.execute("delete from login_attempts where ip = ? and ok = 0", (ip[:64],))
+            conn.execute("insert into login_attempts(ip, ts, ok) values (?,?,2)", (ip[:64], now))
+            return HARD_WAIT
     return 0
 
 
-def record_attempt(ip: str, ok: bool) -> None:
+def global_block() -> int:
+    """全局熔断：只在高频撞库时短暂降速，同样到点自动解除。"""
     now = int(time.time())
     with _connect() as conn:
-        conn.execute("insert into login_attempts(ip, ts, ok) values (?,?,?)",
-                     (ip[:64], now, 1 if ok else 0))
-        if ok:
-            # 登录成功即清空该 IP 的失败计数，避免正常用户被自己之前的错误拖累
-            conn.execute("delete from login_attempts where ip = ? and ok = 0", (ip[:64],))
+        mark = conn.execute(
+            "select max(ts) t from login_attempts where ip = '__global__' and ok = 2 and ts > ?",
+            (now - HARD_WAIT,)).fetchone()
+        if mark and mark["t"]:
+            return max(1, HARD_WAIT - (now - mark["t"]))
+        total = conn.execute(
+            "select count(*) c from login_attempts where ok = 0 and ts > ?",
+            (now - FAIL_WINDOW,)).fetchone()["c"]
+        if total >= GLOBAL_FAILS:
+            conn.execute("insert into login_attempts(ip, ts, ok) values ('__global__',?,2)", (now,))
+            return HARD_WAIT
+    return 0
+
+
+def record_failure(ip: str) -> None:
+    now = int(time.time())
+    with _connect() as conn:
+        _prune_attempts(conn, now)
+        conn.execute("insert into login_attempts(ip, ts, ok) values (?,?,0)", (ip[:64], now))
+
+
+def clear_failures(ip: str) -> None:
+    """登录成功后清空该 IP 的失败计数，避免同事被同网段的错误连累。"""
+    now = int(time.time())
+    with _connect() as conn:
+        conn.execute("delete from login_attempts where ip = ? and ok = 0", (ip[:64],))
+        conn.execute("insert into login_attempts(ip, ts, ok) values (?,?,1)", (ip[:64], now))

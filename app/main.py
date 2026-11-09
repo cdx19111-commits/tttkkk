@@ -161,10 +161,12 @@ async def login_submit(request: Request):
     next_path = _safe_next(str(form.get("next", "")))
     ip = _client_ip(request)
 
-    wait = auth.rate_limited(ip)
-    if wait:
+    # 只有"持续大量失败"才走硬闸（此处不做哈希计算，保护 CPU）；
+    # 软限速不在这里拦截，否则共享出口 IP 的正常用户会被一起挡在门外。
+    hard = auth.hard_block(ip) or auth.global_block()
+    if hard:
         return render_login(status=429, next_path=next_path, username=username,
-                            error=f"尝试次数过多，请在 {wait} 秒后重试。", retry_after=wait)
+                            error=f"尝试过于频繁，请 {hard} 秒后再试。", retry_after=hard)
 
     # hmac.compare_digest 不支持非 ASCII str，这里按 UTF-8 字节比较，仍是恒定时间
     user_ok = hmac.compare_digest(username.encode("utf-8"), auth.LOGIN_USER.encode("utf-8"))
@@ -173,7 +175,7 @@ async def login_submit(request: Request):
         # 重新生成会话标识：先撤销浏览器带来的旧会话，避免会话固定
         auth.revoke_session(request.cookies.get(auth.COOKIE_NAME, ""))
         token = auth.create_session(ip, request.headers.get("user-agent", ""))
-        auth.record_attempt(ip, True)
+        auth.clear_failures(ip)      # 正确登录即清零，不受他人错误尝试影响
         resp = RedirectResponse(next_path or "/", status_code=303)
         resp.set_cookie(
             key=auth.COOKIE_NAME, value=token,
@@ -182,7 +184,12 @@ async def login_submit(request: Request):
         resp.headers["Cache-Control"] = "no-store"
         return resp
 
-    auth.record_attempt(ip, False)
+    auth.record_failure(ip)
+    delay = auth.soft_delay(ip)
+    if delay:
+        # 软限速：口令确实错了，只是让这次重试多等十几秒，而不是锁死十几分钟
+        return render_login(status=429, next_path=next_path, username=username,
+                            error=f"密码错误次数较多，请 {delay} 秒后重试。", retry_after=delay)
     return render_login(status=401, error="账号或密码不正确，请重新输入。",
                         next_path=next_path, username=username)
 
