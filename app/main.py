@@ -19,6 +19,7 @@ from pathlib import Path
 from urllib.parse import quote, urlsplit
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
                                RedirectResponse, Response)
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -124,11 +125,26 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
                                 headers={"Cache-Control": "no-store"})
 
 
-app = FastAPI(title="商品图片资产库", version="0.3.5",
-              docs_url=None, redoc_url=None, openapi_url=None)
+# /docs 与 /openapi.json 均由下面的自定义路由提供：
+# openapi_url 必须开启，否则 Swagger UI 取不到 Schema；docs_url 保持 None，
+# 用自托管静态资源替代 FastAPI 默认的 CDN 版本。
+app = FastAPI(title="商品图片资产库", version="0.3.6",
+              docs_url=None, redoc_url=None, openapi_url="/openapi.json")
 app.add_middleware(SessionAuthMiddleware)
 app.include_router(images_router)
 auth.init_store()
+
+
+@app.get("/docs", include_in_schema=False)
+def api_docs():
+    """Swagger UI。受 Session 认证保护（未登录由中间件返回 401）。"""
+    return get_swagger_ui_html(
+        openapi_url="/openapi.json",
+        title="商品图片资产库 · API 文档",
+        swagger_js_url="/static/swagger/swagger-ui-bundle.js",
+        swagger_css_url="/static/swagger/swagger-ui.css",
+        swagger_favicon_url="/favicon.ico",
+    )
 
 
 @app.get("/healthz")
@@ -213,6 +229,23 @@ def root():
 def legacy_assets_entry():
     """兼容旧链接：/assets 统一回到首页，不再保留第二套页面。"""
     return RedirectResponse(url="/", status_code=302)
+
+
+# Swagger UI 资源本地化（随镜像分发，不走公网 CDN）；
+# 白名单只放两个文件，且同样在 Session 认证之后才可访问。
+SWAGGER_ASSETS = {
+    "swagger-ui-bundle.js": "application/javascript; charset=utf-8",
+    "swagger-ui.css": "text/css; charset=utf-8",
+}
+
+
+@app.get("/static/swagger/{filename}")
+def swagger_asset(filename: str):
+    mime = SWAGGER_ASSETS.get(filename)
+    if not mime:
+        raise HTTPException(404, "Not found")
+    return FileResponse(APP_DIR / "static" / "swagger" / filename,
+                        media_type=mime, headers=NO_CACHE)
 
 
 @app.get("/static/{filename}")
