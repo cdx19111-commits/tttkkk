@@ -37,17 +37,23 @@ PBKDF2_ITER = 600_000
 PBKDF2_PREFIX = "pbkdf2_sha256"
 
 # 口令未配置时用于等价耗时的占位哈希，避免通过响应时间区分「账号不存在」与「口令错误」
-_DUMMY_HASH = f"{PBKDF2_PREFIX}${PBKDF2_ITER}$" + base64.b64encode(b"0" * 16).decode() \
-    + "$" + base64.b64encode(hashlib.pbkdf2_hmac("sha256", b"x", b"0" * 16, PBKDF2_ITER)).decode()
+_DUMMY_HASH = "{}:{}:{}:{}".format(
+    PBKDF2_PREFIX, PBKDF2_ITER,
+    base64.b64encode(b"0" * 16).decode(),
+    base64.b64encode(hashlib.pbkdf2_hmac("sha256", b"x", b"0" * 16, PBKDF2_ITER)).decode())
 
 
 # ---------- 口令哈希 ----------
 
 def hash_password(password: str) -> str:
-    """生成 `pbkdf2_sha256$iterations$salt$hash`；盐每次随机。"""
+    """生成 `pbkdf2_sha256:<迭代>:<b64盐>:<b64摘要>`；盐每次随机。
+
+    用冒号而不是 `$` 分隔：`$` 在 docker compose 的 .env 解析、shell 双引号里
+    都会被当成变量插值，实测会把哈希截断（本机与线上都踩过）。
+    """
     salt = secrets.token_bytes(16)
     dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, PBKDF2_ITER)
-    return "{}${}${}${}".format(PBKDF2_PREFIX, PBKDF2_ITER,
+    return "{}:{}:{}:{}".format(PBKDF2_PREFIX, PBKDF2_ITER,
                                 base64.b64encode(salt).decode(),
                                 base64.b64encode(dk).decode())
 
@@ -55,7 +61,8 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, stored: str = "") -> bool:
     """校验口令。stored 为空（未配置）时仍走一次等价耗时的哈希，但恒返回 False。"""
     configured = bool(stored)
-    target = stored or _DUMMY_HASH
+    # 兼容旧格式（$ 分隔）与新格式（: 分隔）
+    target = (stored or _DUMMY_HASH).replace(":", "$")
     try:
         algo, iters, salt_b64, hash_b64 = target.split("$")
         if algo != PBKDF2_PREFIX:
@@ -98,6 +105,15 @@ def init_store() -> None:
             ok integer not null)""")
         conn.execute("create index if not exists idx_attempts_ip on login_attempts(ip, ts)")
         conn.execute("create index if not exists idx_sessions_exp on sessions(expires_at)")
+    # 会话库仅服务进程可读写（容器内为 root，宿主侧同为 root）
+    try:
+        os.chmod(SESSION_DB, 0o600)
+        for suffix in ("-wal", "-shm"):
+            extra = Path(str(SESSION_DB) + suffix)
+            if extra.exists():
+                os.chmod(extra, 0o600)
+    except OSError:
+        pass
 
 
 def _sid(token: str) -> str:
