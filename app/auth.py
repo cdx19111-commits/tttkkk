@@ -177,10 +177,26 @@ SOFT_WAIT = int(os.getenv("LOGIN_SOFT_WAIT", "15"))        # 单次等待上限�
 HARD_FAILS = int(os.getenv("LOGIN_HARD_FAILS", "30"))      # 达到即硬闸
 HARD_WAIT = int(os.getenv("LOGIN_HARD_WAIT", "60"))        # 硬闸时长（秒）
 GLOBAL_FAILS = int(os.getenv("LOGIN_GLOBAL_FAILS", "200"))  # 全局熔断阈值
+PROBE_GAP = int(os.getenv("LOGIN_PROBE_GAP", "5"))         # 硬闸期间每次校验的最小间隔（秒）
 
 
 def _prune_attempts(conn: sqlite3.Connection, now: int) -> None:
     conn.execute("delete from login_attempts where ts < ?", (now - FAIL_WINDOW * 6,))
+
+
+MARK_GATE = 2      # 硬闸开始时间标记
+MARK_PROBE = 3     # 硬闸期间最近一次被放行校验的时间标记
+
+
+def _add_marker(conn: sqlite3.Connection, ip: str, kind: int, ts: int) -> None:
+    conn.execute("insert into login_attempts(ip, ts, ok) values (?,?,?)", (ip[:64], ts, kind))
+
+
+def _last_marker(conn: sqlite3.Connection, ip: str, kind: int, since: int) -> int:
+    row = conn.execute(
+        "select max(ts) t from login_attempts where ip = ? and ok = ? and ts > ?",
+        (ip[:64], kind, since)).fetchone()
+    return (row["t"] or 0) if row else 0
 
 
 def _ip_fails(conn: sqlite3.Connection, ip: str, now: int) -> tuple[int, int]:
@@ -201,26 +217,37 @@ def soft_delay(ip: str) -> int:
     return max(1, min(SOFT_WAIT, remain))
 
 
-def hard_block(ip: str) -> int:
-    """硬闸秒数；0 表示不拦。
+def gate_decision(ip: str) -> int:
+    """登录前的闸门判定，返回需要等待的秒数（0 表示放行本次校验）。
 
-    触发条件：同一 IP 在窗口内失败达到 HARD_FAILS。
-    触发时清空该 IP 的失败计数并打时间标记，HARD_WAIT 秒后自动解除——
-    是"短暂冷却"，不是"锁到统计窗口结束"。
+    设计要点（V0.3.4 收尾修复）：
+    - 硬闸不再是"整段时间内谁都不许试"，而是**给每个 IP 每 PROBE_GAP 秒一次校验机会**：
+      知道口令的人最多等 PROBE_GAP 秒就能进来，撞库速度却被压到约 12 次/分钟；
+    - 触发硬闸的那一次请求直接放行校验（口令正确就正常登录）；
+    - 只有全局限速（分布式撞库熔断）才不做校验——它是 CPU 保护的最后一道闸。
     """
     now = int(time.time())
+    blocked = global_block()
+    if blocked:
+        return blocked
+
     with _connect() as conn:
-        mark = conn.execute(
-            "select max(ts) t from login_attempts where ip = ? and ok = 2 and ts > ?",
-            (ip[:64], now - HARD_WAIT)).fetchone()
-        if mark and mark["t"]:
-            return max(1, HARD_WAIT - (now - mark["t"]))
-        count, _ = _ip_fails(conn, ip, now)
-        if count >= HARD_FAILS:
+        gate = _last_marker(conn, ip, MARK_GATE, now - HARD_WAIT)
+        if not gate:
+            count, _ = _ip_fails(conn, ip, now)
+            if count < HARD_FAILS:
+                return 0
+            # 触发硬闸：清零失败计数、打时间标记，并放行本次校验
             conn.execute("delete from login_attempts where ip = ? and ok = 0", (ip[:64],))
-            conn.execute("insert into login_attempts(ip, ts, ok) values (?,?,2)", (ip[:64], now))
-            return HARD_WAIT
-    return 0
+            _add_marker(conn, ip, MARK_GATE, now)
+            _add_marker(conn, ip, MARK_PROBE, now)
+            return 0
+
+        last = _last_marker(conn, ip, MARK_PROBE, now - HARD_WAIT)
+        if now - last >= PROBE_GAP:
+            _add_marker(conn, ip, MARK_PROBE, now)
+            return 0
+        return max(1, PROBE_GAP - (now - last))
 
 
 def global_block() -> int:
@@ -236,6 +263,8 @@ def global_block() -> int:
             "select count(*) c from login_attempts where ok = 0 and ts > ?",
             (now - FAIL_WINDOW,)).fetchone()["c"]
         if total >= GLOBAL_FAILS:
+            # 触发即清零窗口内的失败计数，否则标记过期后会立刻再次触发、变成永久封锁
+            conn.execute("delete from login_attempts where ok = 0 and ts > ?", (now - FAIL_WINDOW,))
             conn.execute("insert into login_attempts(ip, ts, ok) values ('__global__',?,2)", (now,))
             return HARD_WAIT
     return 0
@@ -252,5 +281,6 @@ def clear_failures(ip: str) -> None:
     """登录成功后清空该 IP 的失败计数，避免同事被同网段的错误连累。"""
     now = int(time.time())
     with _connect() as conn:
-        conn.execute("delete from login_attempts where ip = ? and ok = 0", (ip[:64],))
+        # 连硬闸/探测标记一起清，避免登录成功后仍被旧的闸门状态影响
+        conn.execute("delete from login_attempts where ip = ? and ok in (0, 2, 3)", (ip[:64],))
         conn.execute("insert into login_attempts(ip, ts, ok) values (?,?,1)", (ip[:64], now))

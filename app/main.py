@@ -161,12 +161,12 @@ async def login_submit(request: Request):
     next_path = _safe_next(str(form.get("next", "")))
     ip = _client_ip(request)
 
-    # 只有"持续大量失败"才走硬闸（此处不做哈希计算，保护 CPU）；
-    # 软限速不在这里拦截，否则共享出口 IP 的正常用户会被一起挡在门外。
-    hard = auth.hard_block(ip) or auth.global_block()
-    if hard:
+    # 闸门：正常情况下直接返回 0（放行）；硬闸期间只限制"每隔几秒校验一次"，
+    # 全局限速（分布式撞库熔断）期间才完全不校验——见 auth.gate_decision 的说明。
+    wait = auth.gate_decision(ip)
+    if wait:
         return render_login(status=429, next_path=next_path, username=username,
-                            error=f"尝试过于频繁，请 {hard} 秒后再试。", retry_after=hard)
+                            error=f"尝试过于频繁，请 {wait} 秒后再试。", retry_after=wait)
 
     # hmac.compare_digest 不支持非 ASCII str，这里按 UTF-8 字节比较，仍是恒定时间
     user_ok = hmac.compare_digest(username.encode("utf-8"), auth.LOGIN_USER.encode("utf-8"))
