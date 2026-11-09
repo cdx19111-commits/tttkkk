@@ -332,8 +332,9 @@ def image_file(image_id: str, w: int = Query(default=0, ge=0, le=1600)):
     mime = MIME.get((r["format"] or "").lower(), "application/octet-stream")
 
     if w <= 0:
+        # no-cache：允许浏览器存副本，但每次必须回源校验——退出登录后不会再从本地缓存拿到图片
         return FileResponse(src, media_type=mime,
-                            headers={"Cache-Control": "private, max-age=3600"})
+                            headers={"Cache-Control": "private, no-cache"})
 
     cached = THUMB_DIR / f"{image_id}_w{w}.webp"
     if not cached.is_file():
@@ -346,7 +347,7 @@ def image_file(image_id: str, w: int = Query(default=0, ge=0, le=1600)):
         except Exception:
             return FileResponse(src, media_type=mime)
     return FileResponse(cached, media_type="image/webp",
-                        headers={"Cache-Control": "private, max-age=86400"})
+                        headers={"Cache-Control": "private, no-cache"})
 
 
 @router.get("/images/{image_id}/download")

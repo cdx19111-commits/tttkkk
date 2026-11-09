@@ -98,6 +98,11 @@ body {
   background: #26313f; color: #7d8ba1;
 }
 
+/* 退出登录：表单按钮，POST 提交，避免 GET 触发状态变更 */
+.logout-form { margin: 0; }
+.nav-item.logout { color: #b9c4d4; }
+.nav-item.logout:hover { background: rgba(220, 90, 80, .14); color: #ffb3ac; }
+
 .sidebar-foot {
   padding: 14px 18px 18px;
   border-top: 1px solid var(--side-line);

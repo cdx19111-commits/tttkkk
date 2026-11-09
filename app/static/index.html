@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>商品图库 · 图片资产库</title>
-<link rel="stylesheet" href="/static/app.css?v=20261106b">
+<link rel="stylesheet" href="/static/app.css?v=20261109a">
 </head>
 <body>
 <div class="app">
@@ -35,10 +35,15 @@
       <button class="nav-item" data-view="info">
         <span class="ico">ⓘ</span> 系统基础信息
       </button>
+      <form method="post" action="/logout" class="logout-form">
+        <button class="nav-item logout" type="submit">
+          <span class="ico">⎋</span> 退出登录
+        </button>
+      </form>
     </nav>
 
     <div class="sidebar-foot">
-      <div class="foot-row"><span>版本</span><b>V0.3.3</b></div>
+      <div class="foot-row"><span>版本</span><b>V0.3.4</b></div>
       <div class="foot-row"><span>数据源</span><b>飞书 · 盖亚</b></div>
     </div>
   </aside>
@@ -128,7 +133,7 @@
             <tr><td><code>GET /api/v1/images/{id}/download</code></td><td>下载，使用标准文件名</td></tr>
             <tr><td><code>GET /api/v1/images-facets</code></td><td>品牌组 / 品牌 / 颜色 / 状态聚合，计数随筛选上下文实时计算</td></tr>
             <tr><td><code>GET /api/v1/brand-tree</code></td><td>统一品牌选择器数据：品牌组（含子品牌）与独立品牌</td></tr>
-            <tr><td><code>GET /docs</code></td><td>OpenAPI 文档</td></tr>
+            <tr><td><code>GET /docs</code></td><td>OpenAPI 文档（需登录；V0.3.4 起默认关闭）</td></tr>
           </tbody>
         </table>
       </div>
@@ -168,6 +173,6 @@
 
 <div class="toast" id="toast" hidden role="status" aria-live="polite"></div>
 
-<script src="/static/app.js?v=20261106b"></script>
+<script src="/static/app.js?v=20261109a"></script>
 </body>
 </html>
