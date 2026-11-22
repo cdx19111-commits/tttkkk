@@ -1,0 +1,99 @@
+<section class="module-surface" id="view-library">
+      <div class="stats" id="stats">
+        <div class="stat"><span class="stat-label">图片总量</span><b id="s-total">—</b><span class="stat-hint" id="s-bytes"></span></div>
+        <div class="stat"><span class="stat-label">已关联型号</span><b id="s-models">—</b><span class="stat-hint">标准型号</span></div>
+        <div class="stat"><span class="stat-label">品牌数</span><b id="s-brands">—</b><span class="stat-hint">图片品牌</span></div>
+      </div>
+
+      <div class="filters">
+                <select id="category" aria-label="商品品类">
+          <option value="phone">手机</option>
+        </select>
+        <div class="combo" id="brandCombo">
+          <button type="button" class="combo-btn" id="brandBtn"
+                  aria-haspopup="listbox" aria-expanded="false" aria-controls="brandPanel">
+            <span class="combo-prefix">品牌</span>
+            <span class="combo-text" id="brandLabel">全部品牌</span>
+            <span class="combo-caret" aria-hidden="true"></span>
+          </button>
+          <div class="combo-panel combo-panel-wide" id="brandPanel" hidden>
+            <input id="brandSearch" class="combo-search" type="search"
+                   placeholder="搜索品牌，例如：努比亚 / iQOO / nubia" autocomplete="off"
+                   aria-label="搜索品牌" role="combobox" aria-expanded="true"
+                   aria-controls="brandList" aria-autocomplete="list">
+            <ul class="combo-list combo-list-tree" id="brandList" role="listbox" aria-label="品牌"></ul>
+            <div class="combo-empty" id="brandEmpty" hidden>没有匹配的品牌，试试「华为」「努比亚」或英文名</div>
+            <div class="combo-foot" id="brandScope">品牌组与独立品牌 · 数字为图片张数</div>
+          </div>
+        </div>
+
+        <div class="combo" id="modelCombo">
+          <button type="button" class="combo-btn" id="modelBtn"
+                  aria-haspopup="listbox" aria-expanded="false" aria-controls="modelPanel">
+            <span class="combo-prefix">型号</span>
+            <span class="combo-text" id="modelLabel">全部型号</span>
+            <span class="combo-caret" aria-hidden="true"></span>
+          </button>
+          <div class="combo-panel combo-panel-wide" id="modelPanel" hidden>
+            <input id="modelSearch" class="combo-search" type="search"
+                   placeholder="搜索型号，例如：Mate 60 / iPad" autocomplete="off"
+                   aria-label="搜索型号" role="combobox" aria-expanded="true"
+                   aria-controls="modelList" aria-autocomplete="list">
+            <ul class="combo-list combo-list-tree" id="modelList" role="listbox" aria-label="型号"></ul>
+            <div class="combo-empty" id="modelEmpty" hidden>没有匹配的型号，试试只输入型号的一部分</div>
+            <div class="combo-foot" id="modelScope">标准型号与目录型号 · 数字为图片张数</div>
+          </div>
+        </div>
+
+        <div class="combo" id="colorCombo">
+          <button type="button" class="combo-btn" id="colorBtn"
+                  aria-haspopup="listbox" aria-expanded="false" aria-controls="colorPanel">
+            <span class="combo-text" id="colorLabel">全部颜色</span>
+            <span class="combo-caret" aria-hidden="true"></span>
+          </button>
+          <div class="combo-panel" id="colorPanel" hidden>
+            <input id="colorSearch" class="combo-search" type="search"
+                   placeholder="搜索颜色，如 黑 / 紫 / 白" autocomplete="off" aria-label="搜索颜色">
+            <ul class="combo-list" id="colorList" role="listbox" aria-label="颜色选项"></ul>
+            <div class="combo-empty" id="colorEmpty" hidden>没有匹配的颜色</div>
+            <div class="combo-foot" id="colorScope">全部颜色</div>
+          </div>
+        </div>
+
+        <button id="reset" class="btn ghost">重置</button>
+        <span class="result-count" id="count"></span>
+      </div>
+
+      <div class="grid" id="grid"></div>
+      <div class="more-wrap"><button id="more" class="btn" hidden>加载更多</button></div>
+      <div class="empty" id="empty" hidden>没有匹配的图片</div>
+    </section>
+<div class="drawer-mask" id="mask" hidden></div>
+<aside class="drawer" id="drawer" hidden aria-label="图片详情">
+  <div class="drawer-head">
+    <div class="d-title">
+      <h3 id="d-model">—</h3>
+      <div class="d-sub"><span id="d-brand">—</span><span id="d-status" class="badge">—</span></div>
+    </div>
+    <button class="close" id="d-close" aria-label="关闭">×</button>
+  </div>
+  <div class="drawer-img"><img id="d-img" alt=""></div>
+  <dl class="kv" id="d-kv"></dl>
+  <section class="spec-card" id="d-spec" hidden aria-label="型号参数">
+    <div class="spec-head" id="d-spec-head" role="button" tabindex="0" aria-expanded="false">
+      <span class="spec-title" id="d-spec-title">型号参数</span>
+      <span class="spec-toggle" id="d-spec-toggle">展开</span>
+    </div>
+    <dl class="spec-list" id="d-spec-list" hidden></dl>
+  </section>
+  <p class="d-note" id="d-note" hidden></p>
+  <div class="drawer-actions">
+    <a id="d-download" class="btn primary" href="#" download>下载原图</a>
+    <a id="d-open" class="btn ghost" href="#" target="_blank" rel="noopener">新窗口打开</a>
+  </div>
+  <div class="share-row">
+    <input id="d-share" class="share-input" type="text" readonly aria-label="图片分享链接">
+    <button id="d-copy" class="btn ghost" type="button">复制图片链接</button>
+  </div>
+</aside>
+<div class="toast" id="galleryToast" hidden role="status" aria-live="polite"></div>

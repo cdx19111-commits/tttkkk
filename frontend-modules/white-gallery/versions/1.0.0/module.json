@@ -1,0 +1,9 @@
+{
+  "id": "white-gallery",
+  "version": "1.0.0",
+  "title": "图片资产库",
+  "subtitle": "白底图 · 按品牌 / 型号 / 颜色检索",
+  "nav_label": "图片资产库",
+  "icon": "▦",
+  "order": 10
+}

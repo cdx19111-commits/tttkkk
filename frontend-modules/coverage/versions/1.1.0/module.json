@@ -1,0 +1,9 @@
+{
+  "id": "coverage",
+  "version": "1.1.0",
+  "title": "覆盖监控",
+  "subtitle": "盖亚全量与 2021 年及以后型号 × 颜色缺口",
+  "nav_label": "覆盖监控",
+  "icon": "◉",
+  "order": 20
+}

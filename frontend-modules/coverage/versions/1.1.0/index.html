@@ -1,0 +1,62 @@
+<div class="panel coverage-panel">
+        <div class="coverage-page-header">
+          <div>
+            <div class="coverage-eyebrow">GAIA × 白底图库</div>
+            <h2 id="coverageTitle">2021 年及以后型号缺口</h2>
+            <p class="muted">先看有多少型号还没有可用白底图，再看型号颜色缺口。</p>
+          </div>
+          <div class="coverage-scope-switch" role="group" aria-label="选择统计范围">
+            <button type="button" class="coverage-scope-button active" data-coverage-scope="post2021" aria-pressed="true">2021 年及以后 · 重点</button>
+            <button type="button" class="coverage-scope-button" data-coverage-scope="all" aria-pressed="false">盖亚全量</button>
+          </div>
+        </div>
+
+        <div class="coverage-summary-grid" id="coverageCards" aria-live="polite"></div>
+        <p class="coverage-freshness muted" id="coverageSnapshot">正在读取最新统计…</p>
+
+        <section class="coverage-brand-panel" aria-labelledby="coverageBrandTitle">
+          <div class="coverage-section-heading">
+            <div><h3 id="coverageBrandTitle">哪些品牌缺口最多</h3><p class="muted">按缺失的型号 × 颜色组合排序；同时显示完全缺少 A 级图的型号数。</p></div>
+          </div>
+          <div class="coverage-brand-bars" id="coverageBrandGaps"></div>
+        </section>
+
+        <section class="coverage-list-section" aria-labelledby="coverageListTitle">
+          <div class="coverage-list-heading">
+            <div><h3 id="coverageListTitle">待补齐清单</h3><p class="muted">支持搜索型号、品牌、颜色或 Gaia ID。</p></div>
+            <div class="coverage-view-switch" role="group" aria-label="缺口清单展示方式">
+              <button type="button" class="coverage-view-button" data-coverage-view="models" aria-pressed="false">按型号看</button>
+              <button type="button" class="coverage-view-button active" data-coverage-view="combinations" aria-pressed="true">按型号 × 颜色看</button>
+            </div>
+          </div>
+          <div class="coverage-toolbar">
+            <input id="coverageSearch" type="search" placeholder="搜索品牌、型号、颜色或 Gaia ID" autocomplete="off" aria-label="搜索缺口清单">
+            <span id="coveragePageInfo" class="muted">—</span>
+          </div>
+          <div class="missing-table-wrap">
+            <table class="missing-table"><thead id="coverageHead"></thead><tbody id="coverageRows"></tbody></table>
+            <div id="coverageEmpty" class="empty" hidden>当前范围没有缺口</div>
+            <div id="coverageError" class="missing-error" hidden>覆盖数据加载失败</div>
+          </div>
+          <div class="missing-pagination">
+            <div><button id="coveragePrev" class="btn ghost" type="button">上一页</button><button id="coverageNext" class="btn ghost" type="button">下一页</button></div>
+          </div>
+        </section>
+
+        <dialog class="coverage-upload-dialog" id="coverageUploadDialog" aria-labelledby="coverageUploadTitle">
+          <form method="dialog" class="coverage-upload-close"><button type="submit" aria-label="关闭">×</button></form>
+          <h3 id="coverageUploadTitle">为缺口上传白底图</h3>
+          <div id="coverageUploadContext" class="coverage-upload-context">正在读取 Gaia 型号、颜色和参数…</div>
+          <p class="coverage-upload-quality-hint">请上传白底商品图：背景干净，手机完整并居中，主体大小适中、留白协调，画面清晰且无水印或促销文字。提交后由审核人员确认。</p>
+          <label class="coverage-upload-file">选择图片（JPEG / PNG / WebP，最大 20 MB）<input id="coverageUploadFile" type="file" accept="image/jpeg,image/png,image/webp"></label>
+          <img id="coverageUploadPreview" class="coverage-upload-preview" alt="待上传图片预览" hidden>
+          <p id="coverageUploadStatus" class="coverage-upload-status" role="status" aria-live="polite"></p>
+          <div class="coverage-upload-actions"><button id="coverageUploadSubmit" class="coverage-scope-button active" type="button" disabled>提交待审核</button><button id="coverageUploadCancel" class="coverage-view-button" type="button">取消</button></div>
+        </dialog>
+        <details class="coverage-pool-details">
+          <summary>数据来源与图库池子明细</summary>
+          <p class="muted">白底图与抖音主图分开统计；来源、质量和审核状态池可重叠。</p>
+          <div class="coverage-pools" id="coveragePools"></div>
+        </details>
+        <p class="coverage-footnote">覆盖只认精确 Gaia 型号 ID 与标准颜色。仅有 B/X、软隐藏、目录候选、用途不明或不属于 Gaia 标准色的图片不计入确认覆盖。上市年份未知的型号暂不计入“2021 年及以后”范围。</p>
+      </div>

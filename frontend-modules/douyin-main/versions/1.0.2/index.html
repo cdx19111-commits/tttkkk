@@ -1,0 +1,33 @@
+<section class="module-surface" id="view-douyin">
+      <div class="stats">
+        <div class="stat"><span class="stat-label">主图数量</span><b id="douyinTotal">—</b><span class="stat-hint">飞书云盘图片</span></div>
+        <div class="stat"><span class="stat-label">目录数量</span><b id="douyinFoldersTotal">—</b><span class="stat-hint">完整目录树</span></div>
+        <div class="stat"><span class="stat-label">存储大小</span><b id="douyinSize">—</b><span class="stat-hint">原图文件</span></div>
+      </div>
+      <div class="panel douyin-panel">
+        <div class="decision-heading"><div><h2>抖音主图</h2>
+          <p class="muted">目录筛选与飞书云盘「抖音主图」保持一致。</p></div>
+          <button id="douyinReload" class="btn ghost" type="button">刷新</button></div>
+        <div id="douyinFolderFilters" class="douyin-folder-filters" aria-label="飞书目录筛选"></div>
+        <div class="douyin-toolbar">
+          <div id="douyinBreadcrumb" class="douyin-breadcrumb">抖音主图</div>
+          <input id="douyinSearch" type="search" placeholder="搜索当前目录图片名称" autocomplete="off">
+          <span id="douyinCount" class="result-count"></span>
+        </div>
+      </div>
+      <div class="grid" id="douyinGrid"></div>
+      <div class="more-wrap"><button id="douyinMore" class="btn" hidden>加载更多</button></div>
+      <div class="empty" id="douyinEmpty" hidden>当前目录没有图片</div>
+    </section>
+<div class="douyin-preview" id="douyinPreview" hidden role="dialog" aria-modal="true" aria-labelledby="douyinPreviewTitle">
+  <div class="douyin-preview-panel">
+    <button class="douyin-preview-close" id="douyinPreviewClose" type="button" aria-label="关闭预览">×</button>
+    <div class="douyin-preview-heading">
+      <strong id="douyinPreviewTitle"></strong>
+      <span id="douyinPreviewMeta"></span>
+      <small id="douyinPreviewPath"></small>
+    </div>
+    <div class="douyin-preview-image-wrap"><img id="douyinPreviewImage" alt=""></div>
+    <div class="douyin-preview-actions"><a class="btn ghost" id="douyinPreviewDownload" href="#" download>下载原图</a><span>按 Esc 或点击空白处关闭，返回列表继续浏览</span></div>
+  </div>
+</div>

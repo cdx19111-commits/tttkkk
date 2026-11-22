@@ -1,0 +1,10 @@
+{
+  "id": "docs",
+  "version": "1.0.2",
+  "title": "图片资产管理平台 API 指南",
+  "subtitle": "图库接口使用说明",
+  "nav_label": "接口文档",
+  "icon": "◇",
+  "order": 90,
+  "surface": "route"
+}

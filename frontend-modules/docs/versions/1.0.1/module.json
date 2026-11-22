@@ -1,0 +1,10 @@
+{
+  "id": "docs",
+  "version": "1.0.1",
+  "title": "API 接入指南",
+  "subtitle": "图库接口使用说明",
+  "nav_label": "接口文档",
+  "icon": "◇",
+  "order": 90,
+  "surface": "route"
+}

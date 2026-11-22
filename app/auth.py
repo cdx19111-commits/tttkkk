@@ -26,6 +26,13 @@ from pathlib import Path
 LOGIN_USER = os.getenv("GALLERY_USER", "爱回收")
 PASSWORD_HASH = os.getenv("GALLERY_PASSWORD_HASH", "").strip()
 
+# V1.0：复核角色（受控复核视图）。未配置时复核入口整体关闭，业务视图不受影响。
+REVIEWER_USER = os.getenv("GALLERY_REVIEWER_USER", "复核员")
+REVIEWER_HASH = os.getenv("GALLERY_REVIEWER_HASH", "").strip()
+
+ROLE_BUSINESS = "business"
+ROLE_REVIEW = "review"
+
 COOKIE_NAME = os.getenv("SESSION_COOKIE", "gallery_session")
 SESSION_TTL = int(os.getenv("SESSION_TTL", "604800"))          # 7 天
 COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "1") != "0"  # 生产恒为 True，仅本地联调可关
@@ -82,6 +89,10 @@ def hash_configured() -> bool:
     return bool(PASSWORD_HASH)
 
 
+def reviewer_configured() -> bool:
+    return bool(REVIEWER_HASH)
+
+
 def credential_epoch() -> str:
     """当前凭据版本，取口令哈希的 SHA-256 前 16 位。
 
@@ -91,7 +102,9 @@ def credential_epoch() -> str:
     """
     if not PASSWORD_HASH:
         return ""
-    return hashlib.sha256(PASSWORD_HASH.encode("utf-8")).hexdigest()[:16]
+    # 两把口令共同决定版本：轮换任意一把，全部旧会话立即失效
+    material = (PASSWORD_HASH + "|" + REVIEWER_HASH).encode("utf-8")
+    return hashlib.sha256(material).hexdigest()[:16]
 
 
 # ---------- 会话存储 ----------
@@ -123,6 +136,7 @@ def init_store() -> None:
         conn.execute("create index if not exists idx_attempts_ip on login_attempts(ip, ts)")
         conn.execute("create index if not exists idx_sessions_exp on sessions(expires_at)")
         _migrate_epoch_column(conn)
+        _migrate_role_column(conn)
     # 会话库仅服务进程可读写（容器内为 root，宿主侧同为 root）
     try:
         os.chmod(SESSION_DB, 0o600)
@@ -151,20 +165,29 @@ def _migrate_epoch_column(conn: sqlite3.Connection) -> None:
 
 
 
+def _migrate_role_column(conn: sqlite3.Connection) -> None:
+    """V1.0：给会话表补 role 列。旧行保持默认 business，不会自动获得复核权限。"""
+    cols = {row["name"] for row in conn.execute("pragma table_info(sessions)")}
+    if "role" not in cols:
+        conn.execute("alter table sessions add column role text default 'business'")
+        conn.execute("update sessions set role='business' where role is null")
+
+
 def _sid(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def create_session(ip: str = "", ua: str = "") -> str:
+def create_session(ip: str = "", ua: str = "", role: str = ROLE_BUSINESS) -> str:
     """新建会话，返回明文令牌（仅用于写入 Cookie）。会话绑定当前凭据版本。"""
     token = secrets.token_urlsafe(32)
     now = int(time.time())
     with _connect() as conn:
         conn.execute("delete from sessions where expires_at <= ?", (now,))
         conn.execute(
-            "insert into sessions(sid, created_at, expires_at, last_seen, ip, ua, auth_epoch)"
-            " values (?,?,?,?,?,?,?)",
-            (_sid(token), now, now + SESSION_TTL, now, ip[:64], ua[:200], credential_epoch()))
+            "insert into sessions(sid, created_at, expires_at, last_seen, ip, ua, auth_epoch, role)"
+            " values (?,?,?,?,?,?,?,?)",
+            (_sid(token), now, now + SESSION_TTL, now, ip[:64], ua[:200],
+             credential_epoch(), role))
     return token
 
 
@@ -190,6 +213,35 @@ def session_valid(token: str) -> bool:
             return False
         conn.execute("update sessions set last_seen = ? where sid = ?", (now, _sid(token)))
     return True
+
+
+def session_role(token: str) -> str:
+    """校验会话并返回角色；无效返回空串。
+
+    与 session_valid 共用同一套校验（过期、凭据版本），额外只读 role。
+    角色只由服务端库决定，不接受任何客户端参数。
+    """
+    if not token:
+        return ""
+    current = credential_epoch()
+    if not current:
+        return ""
+    now = int(time.time())
+    with _connect() as conn:
+        row = conn.execute("select expires_at, auth_epoch, role from sessions where sid = ?",
+                           (_sid(token),)).fetchone()
+        if not row:
+            return ""
+        if row["expires_at"] <= now:
+            conn.execute("delete from sessions where sid = ?", (_sid(token),))
+            return ""
+        stored = row["auth_epoch"] or ""
+        if not hmac.compare_digest(stored.encode("utf-8"), current.encode("utf-8")):
+            conn.execute("delete from sessions where sid = ?", (_sid(token),))
+            return ""
+        conn.execute("update sessions set last_seen = ? where sid = ?", (now, _sid(token)))
+        role = (row["role"] or ROLE_BUSINESS).strip()
+    return role if role in (ROLE_BUSINESS, ROLE_REVIEW) else ROLE_BUSINESS
 
 
 def revoke_session(token: str) -> None:

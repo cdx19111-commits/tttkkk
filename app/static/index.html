@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>商品图库 · 图片资产库</title>
-<link rel="stylesheet" href="/static/app.css?v=20261109a">
+<link rel="stylesheet" href="/static/app.css?v=20261120-feature-modules1">
 </head>
 <body>
 <div class="app">
@@ -20,12 +20,9 @@
 
     <nav class="nav">
       <div class="nav-group">工作台</div>
-      <button class="nav-item active" data-view="library">
-        <span class="ico">▦</span> 图片资产库
-      </button>
-      <button class="nav-item" data-view="models" disabled title="规划中">
-        <span class="ico">◈</span> 标准型号管理
-        <span class="tag">规划中</span>
+      <div id="module-nav-items"></div>
+      <button class="nav-item" data-view="decisions">
+        <span class="ico">◈</span> 业务决策台
       </button>
 
       <div class="nav-group">支持</div>
@@ -56,66 +53,12 @@
         <p id="pageSub">白底图 · 按品牌 / 型号 / 颜色检索</p>
       </div>
       <div class="topbar-right">
-        <input id="q" type="search" placeholder="搜索品牌、型号或颜色" autocomplete="off">
+        <input id="q" type="search" placeholder="搜索品牌、型号或颜色" autocomplete="off" style="display:none">
       </div>
     </header>
 
-    <section class="view" id="view-library">
-      <div class="stats" id="stats">
-        <div class="stat"><span class="stat-label">图片总量</span><b id="s-total">—</b><span class="stat-hint" id="s-bytes"></span></div>
-        <div class="stat"><span class="stat-label">已关联型号</span><b id="s-models">—</b><span class="stat-hint">标准型号</span></div>
-        <div class="stat"><span class="stat-label">待处理</span><b id="s-pending">—</b><span class="stat-hint">需人工确认</span></div>
-        <div class="stat"><span class="stat-label">品牌数</span><b id="s-brands">—</b><span class="stat-hint">原始目录品牌</span></div>
-      </div>
-
-      <div class="filters">
-        <div class="combo" id="brandCombo">
-          <button type="button" class="combo-btn" id="brandBtn"
-                  aria-haspopup="listbox" aria-expanded="false" aria-controls="brandPanel">
-            <span class="combo-prefix">品牌</span>
-            <span class="combo-text" id="brandLabel">全部品牌</span>
-            <span class="combo-caret" aria-hidden="true"></span>
-          </button>
-          <div class="combo-panel combo-panel-wide" id="brandPanel" hidden>
-            <input id="brandSearch" class="combo-search" type="search"
-                   placeholder="搜索品牌，例如：努比亚 / iQOO / nubia" autocomplete="off"
-                   aria-label="搜索品牌" role="combobox" aria-expanded="true"
-                   aria-controls="brandList" aria-autocomplete="list">
-            <ul class="combo-list combo-list-tree" id="brandList" role="listbox" aria-label="品牌"></ul>
-            <div class="combo-empty" id="brandEmpty" hidden>没有匹配的品牌，试试「华为」「努比亚」或英文名</div>
-            <div class="combo-foot" id="brandScope">品牌组与独立品牌 · 数字为图片张数</div>
-          </div>
-        </div>
-
-        <div class="combo" id="colorCombo">
-          <button type="button" class="combo-btn" id="colorBtn"
-                  aria-haspopup="listbox" aria-expanded="false" aria-controls="colorPanel">
-            <span class="combo-text" id="colorLabel">全部颜色</span>
-            <span class="combo-caret" aria-hidden="true"></span>
-          </button>
-          <div class="combo-panel" id="colorPanel" hidden>
-            <input id="colorSearch" class="combo-search" type="search"
-                   placeholder="搜索颜色，如 黑 / 紫 / 白" autocomplete="off" aria-label="搜索颜色">
-            <ul class="combo-list" id="colorList" role="listbox" aria-label="颜色选项"></ul>
-            <div class="combo-empty" id="colorEmpty" hidden>没有匹配的颜色</div>
-            <div class="combo-foot" id="colorScope">全部颜色</div>
-          </div>
-        </div>
-
-        <select id="status" aria-label="匹配状态">
-          <option value="">全部状态</option>
-          <option value="已匹配">已匹配</option>
-          <option value="待处理">待处理</option>
-          <option value="未匹配">未匹配</option>
-        </select>
-        <button id="reset" class="btn ghost">重置</button>
-        <span class="result-count" id="count"></span>
-      </div>
-
-      <div class="grid" id="grid"></div>
-      <div class="more-wrap"><button id="more" class="btn" hidden>加载更多</button></div>
-      <div class="empty" id="empty" hidden>没有匹配的图片</div>
-    </section>
+    <div id="module-view-items"></div>
+    <section class="view" id="view-module-error" hidden><div class="panel"><h2>图库模块暂时不可用</h2><p id="moduleLoadError" class="muted">请刷新页面或联系管理员。</p></div></section>
 
     <section class="view" id="view-info" hidden>
       <div class="panel">
@@ -133,24 +76,57 @@
             <tr><td><code>GET /api/v1/images/{id}/download</code></td><td>下载，使用标准文件名</td></tr>
             <tr><td><code>GET /api/v1/images-facets</code></td><td>品牌组 / 品牌 / 颜色 / 状态聚合，计数随筛选上下文实时计算</td></tr>
             <tr><td><code>GET /api/v1/brand-tree</code></td><td>统一品牌选择器数据：品牌组（含子品牌）与独立品牌</td></tr>
-            <tr><td><code>GET /docs</code></td><td>Swagger 接口文档（需登录）</td></tr>
-            <tr><td><code>GET /openapi.json</code></td><td>OpenAPI Schema（需登录）</td></tr>
+            <tr><td><code>GET /docs</code></td><td>接口文档（中文，需登录）</td></tr>
           </tbody>
         </table>
       </div>
     </section>
 
-    <section class="view" id="view-models" hidden>
-      <div class="placeholder">
-        <h2>标准型号管理</h2>
-        <p>该模块尚未实现，当前仅预留入口。</p>
-        <p class="muted">现有能力：图片已关联到标准品牌与型号；型号本身的增删改、别名维护尚未开放界面。</p>
+    <section class="view" id="view-decisions" hidden>
+      <div class="panel decision-panel">
+        <div class="decision-heading"><div><h2>业务决策台</h2>
+          <p class="muted">按图片当前用途分池；每次调整必须记录原因，原图不物理删除。</p></div>
+          <button id="poolReload" class="btn ghost" type="button">刷新</button></div>
+        <div class="pool-tabs" role="tablist" aria-label="图片池">
+          <button class="pool-tab active" data-pool="A" role="tab"><b>A 池</b><span>当前白底图库</span><strong id="poolCountA">—</strong></button>
+          <button class="pool-tab" data-pool="B" role="tab"><b>B 池</b><span>存疑 / 待复核</span><strong id="poolCountB">—</strong></button>
+          <button class="pool-tab" data-pool="C" role="tab"><b>C 池</b><span>当前不可直接使用</span><strong id="poolCountC">—</strong></button>
+        </div>
+        <div class="pool-rule-card" id="poolRuleCard"></div>
+        <div class="pool-entry panel">
+          <div><h3>录入现有图库图片</h3><p class="muted">输入图片 ID，把该图片与当前型号的关联移入 B 池复核。</p></div>
+          <input id="poolEntryId" type="text" placeholder="图片 ID" aria-label="图片 ID">
+          <input id="poolEntryReason" type="text" maxlength="1000" placeholder="录入原因（必填）" aria-label="录入原因">
+          <button id="poolEntrySubmit" class="btn primary" type="button">录入到 B 池</button>
+        </div>
+        <div class="pool-toolbar"><input id="poolSearch" type="search" placeholder="搜索品牌、型号、颜色或原因" aria-label="搜索当前池子">
+          <span id="poolCount" class="result-count"></span></div>
+        <div id="poolGrid" class="decision-grid"></div>
+        <div id="poolEmpty" class="empty" hidden>这个池子里没有符合条件的图片</div>
+        <div id="poolError" class="review-load-error" hidden></div>
+        <div class="more-wrap"><button id="poolMore" class="btn" type="button" hidden>加载更多</button></div>
       </div>
     </section>
   </div>
 </div>
 
-<div class="drawer-mask" id="mask" hidden></div>
+<div id="poolDrawerMask" class="review-drawer-mask" hidden></div>
+<aside id="poolDrawer" class="review-drawer" hidden aria-label="图库图片池管理">
+  <div class="review-drawer-head"><div><h2 id="poolDetailTitle">图片详情</h2><p id="poolDetailSub" class="muted"></p></div>
+    <button id="poolClose" class="close" aria-label="关闭">×</button></div>
+  <img id="poolDetailImage" class="review-detail-image" alt="图库候选图片">
+  <a id="poolOriginalLink" class="btn ghost" target="_blank" rel="noopener">查看原图</a>
+  <div id="poolDetailBody" class="review-detail-body"></div>
+  <div class="review-decision-form">
+    <label for="poolMoveReason">调整原因（必填，写入操作记录）</label>
+    <textarea id="poolMoveReason" rows="3" maxlength="1000" placeholder="例如：领导标记为 badcase，背景有促销文案"></textarea>
+    <div class="review-actions" id="poolMoveActions"></div>
+    <div id="poolHistory" class="pool-history"></div>
+  </div>
+</aside>
+<div id="poolLightbox" class="review-lightbox" hidden role="dialog" aria-label="原图放大查看">
+  <button id="poolLightboxClose" class="close" aria-label="关闭">×</button><img id="poolLightboxImage" alt="原图放大查看">
+</div>
 <aside class="drawer" id="drawer" hidden aria-label="图片详情">
   <div class="drawer-head">
     <div class="d-title">
@@ -161,6 +137,13 @@
   </div>
   <div class="drawer-img"><img id="d-img" alt=""></div>
   <dl class="kv" id="d-kv"></dl>
+  <section class="spec-card" id="d-spec" hidden aria-label="型号参数">
+    <div class="spec-head" id="d-spec-head" role="button" tabindex="0" aria-expanded="false">
+      <span class="spec-title" id="d-spec-title">型号参数</span>
+      <span class="spec-toggle" id="d-spec-toggle">展开</span>
+    </div>
+    <dl class="spec-list" id="d-spec-list" hidden></dl>
+  </section>
   <p class="d-note" id="d-note" hidden></p>
   <div class="drawer-actions">
     <a id="d-download" class="btn primary" href="#" download>下载原图</a>
@@ -174,6 +157,6 @@
 
 <div class="toast" id="toast" hidden role="status" aria-live="polite"></div>
 
-<script src="/static/app.js?v=20261109a"></script>
+<script src="/static/app.js?v=20261120-feature-modules1"></script>
 </body>
 </html>

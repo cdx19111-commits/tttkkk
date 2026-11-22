@@ -1,0 +1,45 @@
+<section class="module-surface asset-platform" id="assetPlatform">
+  <div class="ap-heading">
+    <div><h2>图片资产管理平台</h2><p>一个入口管理当前可用图片和待治理图片。每次调整都记录原因，原图不物理删除。</p></div>
+    <button class="btn ghost" id="apRefresh" type="button">刷新</button>
+  </div>
+  <div class="ap-tabs" role="tablist" aria-label="图片资产池">
+    <button class="ap-tab active" type="button" role="tab" aria-selected="true" data-ap-pool="A"><span><b>A 池</b><small>当前白底图库</small></span><strong id="apCountA">—</strong></button>
+    <button class="ap-tab" type="button" role="tab" aria-selected="false" data-ap-pool="B"><span><b>B 池</b><small>存疑 / 待复核</small></span><strong id="apCountB">—</strong></button>
+    <button class="ap-tab" type="button" role="tab" aria-selected="false" data-ap-pool="C"><span><b>C 池</b><small>已证明当前不可用</small></span><strong id="apCountC">—</strong></button>
+  </div>
+  <div class="ap-rule" id="apRule"></div>
+  <div class="ap-search-wrap">
+    <label class="ap-search-label" for="apSearch">搜索资产</label>
+    <div class="ap-search-box"><input id="apSearch" type="search" placeholder="输入品牌、型号或颜色，实时查看候选" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="apSuggestions" aria-autocomplete="list"><button id="apSearchClear" type="button" aria-label="清空搜索" hidden>×</button></div>
+    <div class="ap-suggestions" id="apSuggestions" role="listbox" hidden></div>
+    <p class="ap-search-hint">A 池还可以继续按品牌、型号和颜色筛选；搜索候选来自当前图片资产的实时统计。</p>
+  </div>
+  <section class="ap-pool-view" id="apViewA" role="tabpanel" aria-label="A 池">
+    <div class="ap-a-toolbar"><span class="ap-section-title">A 池图片资产</span><span id="apACount" class="result-count"></span></div>
+    <div id="apGalleryRoot"></div>
+  </section>
+  <section class="ap-pool-view" id="apViewOther" role="tabpanel" aria-label="B / C 池" hidden>
+    <div class="ap-entry panel" id="apEntry">
+      <div><h3>录入现有图库图片</h3><p>输入图片 ID，把图片与当前型号的关联移入 B 池复核。</p></div>
+      <input id="apEntryId" type="text" placeholder="图片 ID" aria-label="图片 ID">
+      <input id="apEntryReason" type="text" maxlength="1000" placeholder="录入原因（必填）" aria-label="录入原因">
+      <button id="apEntrySubmit" class="btn primary" type="button">录入到 B 池</button>
+    </div>
+    <div id="apGrid" class="ap-grid"></div>
+    <div id="apEmpty" class="empty" hidden>这个池子里没有符合条件的图片</div>
+    <div id="apError" class="ap-error" hidden></div>
+    <div class="more-wrap"><button id="apMore" class="btn" type="button" hidden>加载更多</button></div>
+  </section>
+  <p class="ap-footnote">池子数量按“图片—型号关系”统计。同一文件关联多个型号时，分别计数、分别审核；C 池在数据库中兼容保存在历史 X 标记下。</p>
+</section>
+<div class="ap-drawer-mask" id="apDrawerMask" hidden></div>
+<aside class="ap-drawer" id="apDrawer" hidden aria-label="图片资产详情">
+  <div class="ap-drawer-head"><div><h2 id="apDetailTitle">图片详情</h2><p id="apDetailSub"></p></div><button class="ap-close" id="apClose" aria-label="关闭">×</button></div>
+  <img id="apDetailImage" class="ap-detail-image" alt="图片资产">
+  <a id="apOriginal" class="btn ghost" target="_blank" rel="noopener">查看原图</a>
+  <div id="apDetailBody" class="ap-detail-body"></div>
+  <div class="ap-decision"><label for="apMoveReason">调整原因（必填，写入操作记录）</label><textarea id="apMoveReason" rows="3" maxlength="1000" placeholder="说明为什么调整到另一个池子"></textarea><div id="apMoveActions" class="ap-actions"></div><div id="apHistory" class="ap-history"></div></div>
+</aside>
+<div class="ap-lightbox" id="apLightbox" hidden role="dialog" aria-label="原图查看"><button id="apLightboxClose" class="ap-close" aria-label="关闭">×</button><img id="apLightboxImage" alt="原图放大查看"></div>
+<div class="ap-toast" id="apToast" hidden role="status" aria-live="polite"></div>
