@@ -4,7 +4,8 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 COPY requirements.lock.txt /app/requirements.lock.txt
 COPY requirements.white-api.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+ARG PIP_OFFLINE=0
+RUN PIP_NO_INDEX=$PIP_OFFLINE PIP_DISABLE_PIP_VERSION_CHECK=1 pip install --no-cache-dir -r /app/requirements.txt
 RUN mkdir -p /app/app/static
 COPY app/__init__.py app/assets_api.py app/categories.py app/service_auth.py app/white_gallery_service.py /app/app/
 COPY app/static/model_params.json /app/app/static/model_params.json

@@ -18,7 +18,7 @@ class FakeDocker:
         self.calls = []
         self.fail = False
     def snapshot(self): return json.loads(json.dumps(self.state))
-    def build(self, module, source, tag, base):
+    def build(self, module, source, tag, base, offline=False):
         self.calls.append(('build', module, str(source), tag, base))
         return NEW
     def image_id(self, image): return image

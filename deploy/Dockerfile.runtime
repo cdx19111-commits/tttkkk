@@ -1,0 +1,4 @@
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+# Run only against an explicitly pinned image ID; this affects image layers, not the host.
+RUN rm -rf /app/app /app/runtime

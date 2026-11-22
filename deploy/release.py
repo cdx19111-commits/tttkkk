@@ -86,8 +86,16 @@ class Docker:
     def image_id(self, image):
         return run(['docker', 'image', 'inspect', '--format', '{{.Id}}', image])
 
-    def build(self, module, source, tag, base):
-        run(['docker', 'build', '--build-arg', 'BASE_IMAGE=' + base, '-f', str(source / SERVICES[module][0]), '-t', tag, str(source)])
+    def build(self, module, source, tag, base, offline=False):
+        args = ['docker', 'build', '--build-arg', 'BASE_IMAGE=' + base, '-f', str(source / SERVICES[module][0]), '-t', tag]
+        env = dict(os.environ)
+        if offline:
+            # Legacy builder accepts exact local image IDs without registry resolution.
+            env['DOCKER_BUILDKIT'] = '0'
+            args += ['--network=none', '--build-arg', 'PIP_OFFLINE=1']
+        result = subprocess.run(args + [str(source)], text=True, capture_output=True, env=env, timeout=300)
+        if result.returncode:
+            raise RuntimeError('Target image build failed (exit ' + str(result.returncode) + '); running services unchanged')
         return self.image_id(tag)
 
     def switch(self, module, image, override):
@@ -102,7 +110,7 @@ def assert_others_unchanged(before, after, target):
             raise RuntimeError('Non-target service changed: ' + module + '; do not overwrite it')
 
 
-def apply_backend(root, module, expected, release_id, source=None, base=None, rollback_image=None, docker=None):
+def apply_backend(root, module, expected, release_id, source=None, base=None, rollback_image=None, docker=None, offline=False):
     validate_name(release_id)
     if not IMAGE.fullmatch(expected): raise ValueError('Expected image must be an exact sha256 image ID')
     if rollback_image is not None and not IMAGE.fullmatch(rollback_image): raise ValueError('Rollback requires an exact image ID')
@@ -132,7 +140,9 @@ def apply_backend(root, module, expected, release_id, source=None, base=None, ro
                 shutil.copytree(source, frozen)
                 verify_source(frozen, manifest)
                 record['commit'] = manifest['commit']
-                image = docker.build(module, frozen, SERVICES[module][2] + ':' + release_id, base)
+                record['base_image'] = base
+                record['offline_build'] = offline
+                image = docker.build(module, frozen, SERVICES[module][2] + ':' + release_id, base, offline=offline)
             else:
                 image = docker.image_id(rollback_image)
             if not IMAGE.fullmatch(image): raise ValueError('Invalid resolved image ID')
@@ -242,6 +252,7 @@ def main():
         if action == 'backend-publish':
             p.add_argument('--source', required=True)
             p.add_argument('--base-image', required=True)
+            p.add_argument('--offline', action='store_true')
         else: p.add_argument('--image', required=True)
     for action in ('frontend-publish', 'frontend-rollback'):
         p = subs.add_parser(action)
@@ -252,13 +263,13 @@ def main():
         if action == 'frontend-publish': p.add_argument('--package', required=True)
     a = parser.parse_args()
     if a.action.startswith('backend'):
-        result = apply_backend(a.root, a.module, a.expected_image, a.release, source=getattr(a, 'source', None), base=getattr(a, 'base_image', None), rollback_image=getattr(a, 'image', None))
+        result = apply_backend(a.root, a.module, a.expected_image, a.release, source=getattr(a, 'source', None), base=getattr(a, 'base_image', None), rollback_image=getattr(a, 'image', None), offline=getattr(a, 'offline', False))
         print(json.dumps({k: result.get(k) for k in ('module', 'release', 'status', 'previous_image', 'image', 'commit')}, ensure_ascii=False))
     else:
         print(json.dumps(frontend(a.root, a.module, a.version, a.expected_current, getattr(a, 'package', None), a.action == 'frontend-rollback'), ensure_ascii=False))
 
 if __name__ == '__main__':
     try: main()
-    except (ValueError, RuntimeError, OSError) as exc:
+    except (ValueError, RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
         print(str(exc), file=sys.stderr)
         sys.exit(1)
