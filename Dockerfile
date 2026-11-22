@@ -6,7 +6,9 @@ COPY requirements.lock.txt /app/requirements.lock.txt
 COPY requirements.txt /app/requirements.txt
 ARG PIP_OFFLINE=0
 RUN PIP_NO_INDEX=$PIP_OFFLINE PIP_DISABLE_PIP_VERSION_CHECK=1 pip install --no-cache-dir -r requirements.txt
-COPY app /app/app
+RUN mkdir -p /app/app
+COPY app/__init__.py app/main.py app/auth.py app/api_proxy.py app/assets_api.py app/categories.py /app/app/
+COPY app/static /app/app/static
 RUN mkdir -p /app/runtime
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

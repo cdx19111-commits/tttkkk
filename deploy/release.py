@@ -19,7 +19,12 @@ SERVICES = {
     'gallery': ('Dockerfile', None, 'gallery-gateway'),
     'white-gallery-api': ('Dockerfile.white-api', 'deploy/white-gallery-api.compose.yaml', 'gallery-white-api'),
     'coverage-api': ('Dockerfile.coverage-api', 'deploy/coverage-api.compose.yaml', 'gallery-coverage-api'),
+    'governance-api': ('Dockerfile.governance-api', 'deploy/governance-api.compose.yaml', 'gallery-governance-api'),
+    'douyin-api': ('Dockerfile.douyin-api', 'deploy/douyin-api.compose.yaml', 'gallery-douyin-api'),
+    'integration-api': ('Dockerfile.integration-api', 'deploy/integration-api.compose.yaml', 'gallery-integration-api'),
+
 }
+OPTIONAL_SERVICES = {'governance-api', 'douyin-api', 'integration-api'}
 IMAGE = re.compile(r'^sha256:[a-f0-9]{64}$')
 NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$')
 
@@ -77,7 +82,11 @@ class Docker:
         result = {}
         for module in SERVICES:
             cid = run(self.compose(module) + ['ps', '-q', module])
-            if not cid: raise RuntimeError('Missing running service: ' + module)
+            if not cid:
+                if module in OPTIONAL_SERVICES:
+                    result[module] = {'container': None, 'image': None, 'health': 'absent'}
+                    continue
+                raise RuntimeError('Missing running service: ' + module)
             data = json.loads(run(['docker', 'inspect', '--format', '{"Id":{{json .Id}},"Image":{{json .Image}},"State":{"Health":{"Status":{{json .State.Health.Status}}}}}', cid]))
             # Keep only nonsensitive runtime identity, never persist environment values.
             result[module] = {'container': data['Id'], 'image': data['Image'], 'health': data.get('State', {}).get('Health', {}).get('Status', 'unknown')}
@@ -110,9 +119,10 @@ def assert_others_unchanged(before, after, target):
             raise RuntimeError('Non-target service changed: ' + module + '; do not overwrite it')
 
 
-def apply_backend(root, module, expected, release_id, source=None, base=None, rollback_image=None, docker=None, offline=False):
+def apply_backend(root, module, expected, release_id, source=None, base=None, rollback_image=None, docker=None, offline=False, bootstrap=False):
     validate_name(release_id)
-    if not IMAGE.fullmatch(expected): raise ValueError('Expected image must be an exact sha256 image ID')
+    if not (IMAGE.fullmatch(expected) or (bootstrap and expected == 'none' and module in OPTIONAL_SERVICES)):
+        raise ValueError('Expected image must be exact; none requires explicit new-service bootstrap')
     if rollback_image is not None and not IMAGE.fullmatch(rollback_image): raise ValueError('Rollback requires an exact image ID')
     root = Path(root).resolve()
     docker = docker or Docker(root)
@@ -123,8 +133,11 @@ def apply_backend(root, module, expected, release_id, source=None, base=None, ro
         current_path = state / 'backend' / module / 'current.json'
         current_record = json.loads(current_path.read_text()) if current_path.is_file() else {}
         previous_commit = current_record.get('commit') if current_record.get('image') == old else None
-        if old != expected: raise ValueError('Stale baseline: running target image changed; integrate before publishing')
-        if any(v['health'] != 'healthy' for v in before.values()): raise ValueError('Services must be healthy before release')
+        if (old or 'none') != expected: raise ValueError('Stale baseline: running target image changed; integrate before publishing')
+        if old is None and not bootstrap: raise ValueError('New service requires --bootstrap')
+        if any(v['health'] not in {'healthy', 'absent'} for key, v in before.items()
+               if not (key == module and rollback_image is not None)):
+            raise ValueError('Existing services must be healthy before release')
         release_dir = state / 'backend' / module / release_id
         release_dir.mkdir(parents=True, exist_ok=False)
         record = {'module': module, 'release': release_id, 'previous_image': old, 'previous_commit': previous_commit, 'before': before, 'status': 'preparing', 'ui_verified': False}
@@ -170,7 +183,9 @@ def apply_backend(root, module, expected, release_id, source=None, base=None, ro
             return record
         except Exception:
             record['status'] = 'failed_before_switch'
-            if switching:
+            if switching and old is None:
+                record['status'] = 'bootstrap_failed_no_previous_version'
+            elif switching:
                 try:
                     # The module lock protects target rollback; no other service is stopped or restored.
                     docker.switch(module, old, release_dir / 'restore.compose.json')
@@ -264,6 +279,7 @@ def main():
             p.add_argument('--source', required=True)
             p.add_argument('--base-image', required=True)
             p.add_argument('--offline', action='store_true')
+            p.add_argument('--bootstrap', action='store_true')
         else: p.add_argument('--image', required=True)
     for action in ('frontend-publish', 'frontend-rollback'):
         p = subs.add_parser(action)
@@ -274,7 +290,7 @@ def main():
         if action == 'frontend-publish': p.add_argument('--package', required=True)
     a = parser.parse_args()
     if a.action.startswith('backend'):
-        result = apply_backend(a.root, a.module, a.expected_image, a.release, source=getattr(a, 'source', None), base=getattr(a, 'base_image', None), rollback_image=getattr(a, 'image', None), offline=getattr(a, 'offline', False))
+        result = apply_backend(a.root, a.module, a.expected_image, a.release, source=getattr(a, 'source', None), base=getattr(a, 'base_image', None), rollback_image=getattr(a, 'image', None), offline=getattr(a, 'offline', False), bootstrap=getattr(a, 'bootstrap', False))
         print(json.dumps({k: result.get(k) for k in ('module', 'release', 'status', 'previous_image', 'image', 'commit')}, ensure_ascii=False))
     else:
         print(json.dumps(frontend(a.root, a.module, a.version, a.expected_current, getattr(a, 'package', None), a.action == 'frontend-rollback'), ensure_ascii=False))

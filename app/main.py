@@ -28,8 +28,6 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from . import auth
 from . import assets_api
-from . import business_review, pool_management
-from . import douyin_gallery
 from .api_proxy import router as api_proxy_router
 
 APP_DIR = Path(__file__).resolve().parent
@@ -78,7 +76,7 @@ def _module_current_dir(module_id: str):
     return current_dir, metadata
 
 # 这些路径即使请求 HTML 也只回 401，不跳转（接入指南、技术文档、OpenAPI）
-API_LIKE_PREFIX = ("/api/", "/frontend-modules/", "/docs", "/api-docs", "/redoc", "/openapi.json")
+API_LIKE_PREFIX = ("/openapi/v1/", "/api/", "/frontend-modules/", "/docs", "/api-docs", "/redoc", "/openapi.json")
 
 
 def _client_ip(request: Request) -> str:
@@ -167,6 +165,9 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
 
         # 未登录：接口、图片文件、静态资源、文档一律 401；页面请求 302 到登录页
         is_api_like = path.startswith(API_LIKE_PREFIX) or path.startswith("/static/")
+        if is_api_like and path.startswith("/openapi/v1/"):
+            return JSONResponse({"code": "UNAUTHORIZED", "message": "需要图库授权登录", "details": {}},
+                                status_code=401, headers={"Cache-Control": "no-store"})
         if is_api_like:
             return JSONResponse({"detail": "需要登录"}, status_code=401,
                                 headers={"Cache-Control": "no-store"})
@@ -184,9 +185,6 @@ app = FastAPI(title="商品图片资产库", version="1.2.1-uni",
               docs_url=None, redoc_url=None, openapi_url=None)
 app.add_middleware(SessionAuthMiddleware)
 app.include_router(api_proxy_router)
-app.include_router(business_review.router)
-app.include_router(pool_management.router)
-app.include_router(douyin_gallery.router)
 auth.init_store()
 
 
@@ -205,10 +203,6 @@ async def stop_api_proxy_client():
         await client.aclose()
 
 
-@app.on_event("startup")
-def init_business_review_store():
-    business_review.init_schema()
-    douyin_gallery.init_schema()
 
 
 @app.get("/docs", include_in_schema=False)
@@ -226,13 +220,10 @@ def api_guide():
 @app.get("/api-docs", include_in_schema=False)
 def api_docs():
     """原生 Swagger UI（技术参考 / 在线试调）。"""
-    return get_swagger_ui_html(
-        openapi_url="/openapi.json",
-        title="商品图片资产库 · API 技术参考",
-        swagger_js_url="/static/swagger/swagger-ui-bundle.js",
-        swagger_css_url="/static/swagger/swagger-ui.css",
-        swagger_favicon_url="/favicon.ico",
-    )
+    current = _module_current_dir("docs")
+    if current is None:
+        raise HTTPException(503, "接口文档模块尚未发布")
+    return RedirectResponse(f"/frontend-modules/docs/{current[1]['version']}/index.html#swagger", status_code=302, headers=NO_CACHE)
 
 
 @app.get("/openapi.json", include_in_schema=False)
@@ -248,7 +239,9 @@ async def aggregate_openapi(request: Request):
     else:
         owned_client = False
     try:
-        for service in ("http://white-gallery-api:8000", "http://coverage-api:8000"):
+        for service in ("http://white-gallery-api:8000", "http://coverage-api:8000",
+                        "http://governance-api:8000", "http://douyin-api:8000",
+                        "http://integration-api:8000"):
             try:
                 response = await client.get(f"{service}/openapi.json",
                                             headers={"x-gallery-role": role})

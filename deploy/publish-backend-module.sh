@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
 module="${1:-}"
-case "$module" in white-gallery-api|coverage-api) shift;; *) echo 'Usage: publish-backend-module.sh white-gallery-api|coverage-api --source DIR --expected-image sha256:... --release ID --base-image IMAGE@sha256:...' >&2; exit 2;; esac
+case "$module" in white-gallery-api|coverage-api|governance-api|douyin-api|integration-api) shift;; *) echo 'Usage: publish-backend-module.sh white-gallery-api|coverage-api --source DIR --expected-image sha256:... --release ID --base-image IMAGE@sha256:...' >&2; exit 2;; esac
 exec python3 "$(dirname "$0")/release.py" backend-publish "$module" "$@"

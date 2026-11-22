@@ -1,0 +1,25 @@
+services:
+  integration-api:
+    image: gallery-integration-api:module-split-v1
+    read_only: true
+    environment:
+      - ASSET_ROOT=/data/v03
+      - THUMB_DIR=/tmp/gallery-thumbs
+      - GAIA_MODEL_POOL_PATH=/app/gaia_runtime/gaia_model_pool.json
+    volumes:
+      - ./v03data:/data/v03:ro
+      - ./app/gaia_runtime:/app/gaia_runtime:ro
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    networks:
+      - white-gallery-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=5)"]
+      interval: 10s
+      timeout: 8s
+      retries: 3
+networks:
+  white-gallery-internal:
+    external: true
+    name: gallery-white-api-internal

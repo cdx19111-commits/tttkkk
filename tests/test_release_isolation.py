@@ -156,3 +156,19 @@ def test_offline_build_is_bounded_and_has_no_network(tmp_path, monkeypatch):
     assert 'PIP_OFFLINE=1' in captured['args']
     assert captured['env']['DOCKER_BUILDKIT'] == '0'
     assert captured['timeout'] == 300
+
+
+def test_optional_service_bootstrap_does_not_replace_existing_services(tmp_path):
+    docker=FakeDocker()
+    for m in r.OPTIONAL_SERVICES: docker.state[m]={'container':None,'image':None,'health':'absent'}
+    before=docker.snapshot()
+    result=r.apply_backend(tmp_path/'host','integration-api','none','bootstrap',source(tmp_path),BASE,docker=docker,bootstrap=True)
+    assert result['previous_image'] is None
+    assert result['image']==NEW
+    assert all(docker.state[m]==before[m] for m in r.SERVICES if m!='integration-api')
+    assert all(c[1]=='integration-api' for c in docker.calls)
+
+
+def test_absent_target_requires_explicit_bootstrap(tmp_path):
+    with pytest.raises(ValueError):
+        r.apply_backend(tmp_path,'integration-api','none','implicit',docker=FakeDocker())

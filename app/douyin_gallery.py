@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import mimetypes
+import os
 import sqlite3
 from contextlib import closing
 from datetime import datetime, timezone
@@ -25,7 +26,9 @@ def _now() -> str:
 
 
 def _conn() -> sqlite3.Connection:
-    c = sqlite3.connect(ASSET_DB, timeout=30, isolation_level=None)
+    c = (sqlite3.connect(f"file:{ASSET_DB}?mode=ro", uri=True, timeout=30, isolation_level=None)
+         if os.getenv("DOUYIN_READ_ONLY") == "1"
+         else sqlite3.connect(ASSET_DB, timeout=30, isolation_level=None))
     c.row_factory = sqlite3.Row
     return c
 

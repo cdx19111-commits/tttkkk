@@ -14,7 +14,7 @@ parser.add_argument('--commit', default='HEAD')
 a = parser.parse_args()
 root = Path(__file__).resolve().parents[1]
 commit = subprocess.check_output(['git', '-C', str(root), 'rev-parse', '--verify', a.commit + '^{commit}'], text=True).strip()
-paths = ['app', 'Dockerfile', 'Dockerfile.white-api', 'Dockerfile.coverage-api', 'requirements.txt', 'requirements.white-api.txt', 'requirements.coverage-api.txt', 'requirements.lock.txt', '.dockerignore']
+paths = ['app', 'Dockerfile', 'Dockerfile.white-api', 'Dockerfile.coverage-api', 'requirements.txt', 'requirements.white-api.txt', 'requirements.coverage-api.txt', 'requirements.lock.txt', '.dockerignore'] + [f'Dockerfile.{m}-api' for m in ('governance','douyin','integration')] + [f'requirements.{m}-api.txt' for m in ('governance','douyin','integration')]
 if subprocess.check_output(['git', '-C', str(root), 'status', '--porcelain', '--', *paths], text=True).strip():
     raise SystemExit('Application/build files have uncommitted changes; commit/review first')
 archive = subprocess.check_output(['git', '-C', str(root), 'archive', '--format=tar', commit, '--', *paths])

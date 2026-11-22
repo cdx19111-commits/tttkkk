@@ -69,7 +69,7 @@ def test_gateway_proxy_does_not_capture_unrelated_api_routes():
     app = FastAPI()
     app.include_router(api_proxy.router)
     with TestClient(app) as client:
-        response = client.get("/api/v1/business-review")
+        response = client.get("/api/v1/unrelated-module")
     assert response.status_code == 404
 
 
