@@ -172,3 +172,11 @@ def test_optional_service_bootstrap_does_not_replace_existing_services(tmp_path)
 def test_absent_target_requires_explicit_bootstrap(tmp_path):
     with pytest.raises(ValueError):
         r.apply_backend(tmp_path,'integration-api','none','implicit',docker=FakeDocker())
+
+
+def test_gateway_cannot_switch_before_new_business_services_are_ready(tmp_path):
+    docker=FakeDocker()
+    for m in r.OPTIONAL_SERVICES: docker.state[m]={'container':None,'image':None,'health':'absent'}
+    with pytest.raises(ValueError,match='before switching the gateway'):
+        r.apply_backend(tmp_path,'gallery',OLD,'too-early',docker=docker)
+    assert docker.calls==[]

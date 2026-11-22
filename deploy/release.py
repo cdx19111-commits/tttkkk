@@ -140,6 +140,8 @@ def apply_backend(root, module, expected, release_id, source=None, base=None, ro
         previous_commit = current_record.get('commit') if current_record.get('image') == old else None
         if (old or 'none') != expected: raise ValueError('Stale baseline: running target image changed; integrate before publishing')
         if old is None and not bootstrap: raise ValueError('New service requires --bootstrap')
+        if module == 'gallery' and rollback_image is None and any(v['health'] != 'healthy' for v in before.values()):
+            raise ValueError('Deploy all business services healthy before switching the gateway')
         if any(v['health'] not in {'healthy', 'absent'} for key, v in before.items()
                if not (key == module and rollback_image is not None)):
             raise ValueError('Existing services must be healthy before release')

@@ -143,3 +143,13 @@ def test_runtime_images_do_not_include_another_services_route_module():
         assert 'app/storage_contract.py' in recipe
         assert 'app/assets_api.py' not in recipe
         assert 'app/main.py' not in recipe
+
+
+def test_docs_frontend_bundles_its_renderer_without_gateway_static_dependency():
+    root=Path(__file__).parents[1]/'frontend-modules/docs/versions/1.1.1'
+    js=(root/'module.js').read_text();css=(root/'module.css').read_text()
+    assert 'webpackUniversalModuleDefinition' in js
+    assert '/static/swagger/' not in js+css
+    assert '.swagger-ui' in css
+    metadata=json.loads((root/'module.json').read_text())
+    assert 'Apache License' in metadata['bundled_vendor']['license_text']
