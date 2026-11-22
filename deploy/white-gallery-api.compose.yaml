@@ -1,0 +1,27 @@
+services:
+  white-gallery-api:
+    image: gallery-white-api:20261120-1
+    build:
+      context: .
+      dockerfile: Dockerfile.white-api
+      args:
+        BASE_IMAGE: ${BACKEND_BASE_IMAGE:-python@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea}
+    environment:
+      - ASSET_ROOT=/data/v03
+      - THUMB_DIR=/tmp/gallery-thumbs
+    volumes:
+      - ./v03data:/data/v03:ro
+    tmpfs:
+      - /tmp/gallery-thumbs:rw,noexec,nosuid,size=512m
+    networks:
+      - white-gallery-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 8s
+      retries: 3
+networks:
+  white-gallery-internal:
+    external: true
+    name: gallery-white-api-internal

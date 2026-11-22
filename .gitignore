@@ -4,3 +4,20 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .DS_Store
+
+# Generated artifacts and local-only data; never discard unmerged worktrees.
+/handoff/
+/work/
+/worktrees/
+/data/
+/v03data/
+/release-state/
+/releases/
+.venv/
+.env.*
+!.env.example
+._*
+
+frontend-modules/*/.publish.lock
+frontend-modules/*/.publish-lock/
+frontend-modules/.release-events/

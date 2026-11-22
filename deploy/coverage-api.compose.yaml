@@ -1,0 +1,26 @@
+services:
+  coverage-api:
+    image: gallery-coverage-api:20261120-1
+    build:
+      context: .
+      dockerfile: Dockerfile.coverage-api
+      args:
+        BASE_IMAGE: ${BACKEND_BASE_IMAGE:-python@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea}
+    environment:
+      - ASSET_ROOT=/data/v03
+      - GAIA_MODEL_POOL_PATH=/app/gaia_runtime/gaia_model_pool.json
+    volumes:
+      - ./v03data:/data/v03:ro
+      - ./app/gaia_runtime:/app/gaia_runtime:ro
+    networks:
+      - coverage-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 8s
+      retries: 3
+networks:
+  coverage-internal:
+    external: true
+    name: gallery-coverage-api-internal

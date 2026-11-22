@@ -1,0 +1,19 @@
+[Unit]
+Description=Daily Gaia phone model and color pool refresh for Gallery
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/gallery-mvp/app
+EnvironmentFile=/etc/gallery-gaia-pool.env
+ExecStart=/usr/bin/python3 /opt/gallery-mvp/app/tools/gaia/build_model_pool.py --out /opt/gallery-mvp/app/gaia_runtime/gaia_model_pool.json --params /opt/gallery-mvp/app/gaia_runtime/gaia_launch_years.json
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/gallery-mvp/app/gaia_runtime
+StandardOutput=journal
+StandardError=journal

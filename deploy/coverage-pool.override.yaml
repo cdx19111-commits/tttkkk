@@ -1,0 +1,7 @@
+services:
+  gallery:
+    image: gallery-mvp-gallery:coverage-20261119-r2
+    volumes:
+      - ./app/gaia_runtime:/app/gaia_runtime:ro
+    environment:
+      - GAIA_MODEL_POOL_PATH=/app/gaia_runtime/gaia_model_pool.json
