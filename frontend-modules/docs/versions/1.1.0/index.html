@@ -27,10 +27,12 @@
     <a href="#image"><span class="dot"></span>怎么拿到图片</a>
     <a href="#model-color"><span class="dot"></span>型号与颜色</a>
     <a href="#api-inventory"><span class="dot"></span>当前接口清单</a>
+    <a href="#listing-service"><span class="dot"></span>业务接口对接</a>
+    <a href="#swagger"><span class="dot"></span>在线接口调试</a>
   </nav>
 
   <div class="side-foot">
-    <div>文档版本 <b>v2.1</b></div>
+    <div>文档版本 <b>1.1.0</b></div>
     <div>核心接口 <b>/api/v1/images</b></div>
   </div>
 </aside>
@@ -46,11 +48,11 @@
   <main class="doc">
 
     <div class="hero">
-      <span class="eyebrow">业务接入 · 一个接口</span>
+      <span class="eyebrow">图片查询 · 商品素材对接</span>
       <h1>图片资产管理平台 API 接入指南</h1>
       <p class="lede">
         提供商品信息，调用一个图片查询接口，就能拿到可用图片的信息，再按授权方式取图。
-        业务接入只需要理解 <code>GET /api/v1/images</code> 这一个接口。
+        图片查询使用 <code>GET /api/v1/images</code>；商品上架素材对接使用 <a href="#listing-service">业务对接接口</a>，支持型号查询、素材解析、批量预检和原图下载。
       </p>
     </div>
 
@@ -353,7 +355,7 @@ print("已保存", first["display_brand"], first["model_name"], first["display_c
 
     <section id="listing-service" class="card">
       <h2>业务接口对接 · 独立服务</h2>
-      <p>当前对接接口使用图库已有登录 Cookie，未登录返回 JSON 401。服务只读访问同一图库与 Gaia 型号池，当前支持手机；不提供上传、审核或删除操作。</p>
+      <p>当前对接接口使用图库已有登录 Cookie，未登录返回 JSON 401。当前支持手机型号查询、素材解析、预检和下载；不提供上传、审核或删除操作。</p>
       <p>接口返回的抖店适用性与图库 A 级准入是不同口径；保留已有对接实现，未调整图片准入或自动放宽匹配。</p>
       <table><thead><tr><th>方法</th><th>路径</th><th>能力</th></tr></thead><tbody>
         <tr><td>GET</td><td><code>/openapi/v1/listing/models</code></td><td>型号候选与精确查询</td></tr>
@@ -362,7 +364,7 @@ print("已保存", first["display_brand"], first["model_name"], first["display_c
         <tr><td>GET</td><td><code>/openapi/v1/listing/images/{image_id}/file</code></td><td>原图字节、ETag 与条件下载</td></tr>
       </tbody></table>
       <p><a href="#swagger">打开在线接口调试</a> · <a href="/openapi/v1/schema.json" target="_blank" rel="noopener">读取对接服务 Schema</a></p>
-      <p class="muted">接口服务和本说明页面分别发布；精确字段与可调用操作以当前 Schema 为准。服务令牌、非手机支持和性能指标需后续联调确认，本次不按参考文档擅自切换认证方式。</p>
+      <p class="muted">精确字段与可调用操作以当前 Schema 为准。当前使用登录 Cookie，尚未提供独立服务令牌或非手机对接能力；性能指标以联调结果为准。</p>
     </section>
     <section id="swagger" class="card">
       <h2>在线接口调试</h2>

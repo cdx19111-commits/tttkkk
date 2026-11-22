@@ -46,7 +46,9 @@ from app.coverage_service import app as coverage_app
 @pytest.fixture(autouse=True)
 def current_service_boundaries(monkeypatch, tmp_path):
     monkeypatch.setattr(assets_api, "ASSET_DB", DB)
+    monkeypatch.setattr(main.storage_contract, "ASSET_DB", DB)
     assets_api.reset_schema_cache()
+    main.storage_contract.reset_schema_cache()
     monkeypatch.setattr(coverage_monitor, "ASSET_DB", DB)
     monkeypatch.setattr(coverage_monitor, "POOL_PATH", POOL)
     monkeypatch.setattr(auth, "PASSWORD_HASH", "test-only-credential-epoch")
@@ -55,6 +57,7 @@ def current_service_boundaries(monkeypatch, tmp_path):
     auth.init_store()
     yield
     assets_api.reset_schema_cache()
+    main.storage_contract.reset_schema_cache()
 
 
 def test_coverage_routes_are_session_protected_and_count_only_white_a(tmp_path, monkeypatch):

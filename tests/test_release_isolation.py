@@ -137,8 +137,8 @@ def test_docker_switch_uses_exact_image_and_no_dependency_restart(tmp_path, monk
 
 def test_clean_coverage_image_explicitly_includes_parameter_dependencies():
     dockerfile = (Path(__file__).parents[1] / "Dockerfile.coverage-api").read_text()
-    assert "app/assets_api.py" in dockerfile
-    assert "app/categories.py" in dockerfile
+    assert "app/storage_contract.py" in dockerfile
+    assert "app/model_parameters.py" in dockerfile
     assert "COPY app/static/model_params.json" in dockerfile
     assert 'RUN python -c "import app.coverage_service"' in dockerfile
 

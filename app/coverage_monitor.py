@@ -9,7 +9,8 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Query
 
 from .coverage_engine import _norm, asset_pools_summary, calculate, white_pool_rows
-from .assets_api import model_params_for
+from .model_parameters import model_params_for
+from .storage_contract import read_gaia_pool, read_phone_rows
 
 router = APIRouter(prefix="/api/v1", tags=["coverage-monitor"])
 POOL_PATH = Path(os.getenv("GAIA_MODEL_POOL_PATH", "/app/gaia_runtime/gaia_model_pool.json"))
@@ -25,33 +26,11 @@ def _db():
 
 
 def _pool() -> dict:
-    if not POOL_PATH.is_file():
-        raise HTTPException(503, "Gaia 型号池尚未生成；请先运行每日同步任务")
-    try:
-        data = json.loads(POOL_PATH.read_text(encoding="utf-8"))
-        models = data["models"]
-        if not isinstance(models, list) or not models:
-            raise ValueError("models 为空或不是数组")
-        ids = [str(x.get("model_id", "")).strip() for x in models]
-        if any(not x for x in ids) or len(ids) != len(set(ids)):
-            raise ValueError("Gaia 型号 ID 缺失或重复")
-        return data
-    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
-        raise HTTPException(503, f"Gaia 型号池校验失败：{exc}") from exc
+    return read_gaia_pool(POOL_PATH)
 
 
 def _phone_rows() -> list[dict]:
-    conn = _db()
-    try:
-        columns = {r[1] for r in conn.execute("pragma table_info(image_assets)")}
-        required = {"category", "model_id", "standard_color", "quality_level", "asset_kind"}
-        if not required <= columns:
-            raise HTTPException(503, "图库缺少白底池必需字段，拒绝按不完整口径统计")
-        conn.row_factory = sqlite3.Row
-        rows = [dict(r) for r in conn.execute("select * from image_assets where lower(category)='phone'")]
-    finally:
-        conn.close()
-    return rows
+    return read_phone_rows(ASSET_DB)
 
 
 def _key(value: str) -> str:

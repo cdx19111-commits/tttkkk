@@ -27,7 +27,7 @@ from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from . import auth
-from . import assets_api
+from . import storage_contract
 from .api_proxy import router as api_proxy_router
 
 APP_DIR = Path(__file__).resolve().parent
@@ -141,7 +141,7 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
         # 0) fail-closed 守卫：库未完成质量分层迁移时，除健康检查外一律 503。
         #    这一层在鉴权之前，避免"能登录就等于能看到图"。
         if path != "/healthz":
-            ok, _msg = assets_api.quality_schema_ok()
+            ok, _msg = storage_contract.quality_schema_ok()
             if not ok:
                 return JSONResponse(
                     {"detail": "图片服务已进入安全保护：数据库未完成质量分层迁移",
@@ -269,7 +269,7 @@ def healthz():
     V1.0 加固：库未完成质量分层迁移时返回 503，让编排层/监控直接判定为不健康，
     而不是"容器 healthy 但把 B/X 一起放出去"。
     """
-    ok, msg = assets_api.quality_schema_ok()
+    ok, msg = storage_contract.quality_schema_ok()
     if not ok:
         return JSONResponse({"ok": False, "guard": "schema", "reason": msg},
                             status_code=503)

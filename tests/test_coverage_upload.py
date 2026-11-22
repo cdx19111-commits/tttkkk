@@ -70,6 +70,7 @@ def test_context_rejects_wrong_color_and_currently_covered_combo(monkeypatch, tm
     wrong = client.get("/api/v1/coverage-upload-context", params={"model_id": "42", "color": "紫色"})
     assert wrong.status_code == 422
     monkeypatch.setattr(coverage_monitor, "_phone_rows", lambda: [_coverage_row()])
+    monkeypatch.setattr(business_review, "read_phone_rows", lambda _path: [_coverage_row()])
     covered = client.get("/api/v1/coverage-upload-context", params={"model_id": "42", "color": "薰衣草紫"})
     assert covered.status_code == 409
 
@@ -77,6 +78,7 @@ def test_context_rejects_wrong_color_and_currently_covered_combo(monkeypatch, tm
 def test_review_guard_prevents_second_a_image_for_same_combo(monkeypatch, tmp_path):
     _app(monkeypatch, tmp_path)
     monkeypatch.setattr(coverage_monitor, "_phone_rows", lambda: [_coverage_row()])
+    monkeypatch.setattr(business_review, "read_phone_rows", lambda _path: [_coverage_row()])
     try:
         business_review._ensure_combo_uncovered("42", "薰衣草紫")
     except Exception as exc:

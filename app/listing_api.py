@@ -15,7 +15,8 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import assets_api, brands
+from . import storage_contract as assets_api
+from . import brands
 
 router = APIRouter(prefix="/openapi/v1", tags=["Douyin listing API"])
 GAIA_POOL_PATH = Path(os.getenv("GAIA_MODEL_POOL_PATH", "/app/app/gaia_runtime/gaia_model_pool.json"))

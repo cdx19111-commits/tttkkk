@@ -129,6 +129,10 @@
 
   // 在线接口清单以当前服务实际暴露的 OpenAPI 为源，避免手写路由表过期。
   var apiNames = {
+    "/openapi/v1/listing/models": "查询标准型号与候选",
+    "/openapi/v1/listing/resolve": "解析单商品上架素材",
+    "/openapi/v1/listing/precheck": "批量预检商品素材缺口",
+    "/openapi/v1/listing/images/{image_id}/file": "下载原图并支持 ETag 条件请求",
     "/api/v1/images": "按品牌、型号、颜色和品类查询图片资产",
     "/api/v1/images-facets": "按当前筛选条件统计可选品牌、型号和颜色",
     "/api/v1/brand-tree": "读取品牌组、子品牌和独立品牌树",
@@ -160,6 +164,8 @@
     "/api/v1/catalog": "读取图片品类和素材类型字典"
   };
   var tagNames = {
+    "Douyin listing API": "业务接口对接",
+    "douyin gallery": "抖音主图素材",
     "images": "图片资产查询",
     "image pools": "A / B / C 图片池管理",
     "business review": "历史候选审核接口（兼容）",

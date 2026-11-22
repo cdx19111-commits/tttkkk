@@ -15,9 +15,10 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 
-from . import categories, coverage_monitor
+from . import categories
+from .storage_contract import read_phone_rows
 from .coverage_engine import _norm, white_pool_rows
-from .assets_api import ASSET_DB, ASSET_ROOT
+from .storage_contract import ASSET_DB, ASSET_ROOT
 
 router = APIRouter(prefix="/api/v1/business-review", tags=["business review"])
 ASSET_DIR = ASSET_ROOT / "business_review_assets"
@@ -197,7 +198,7 @@ def _inspect_upload_image(path: Path, declared_mime: str) -> tuple[str, int, int
 
 def _ensure_combo_uncovered(model_id: str, color: str) -> None:
     """Preserve the one-A-image-per-exact-Gaia-model/color business invariant."""
-    rows, _ = white_pool_rows(coverage_monitor._phone_rows())
+    rows, _ = white_pool_rows(read_phone_rows(ASSET_DB))
     if any(row.get("_model_id") == str(model_id).strip()
            and row.get("_color_key") == _norm(color) for row in rows):
         raise HTTPException(409, "该型号颜色组合已有 A 级白底图，不能再新增第二张")

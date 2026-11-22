@@ -3,7 +3,7 @@ import sqlite3
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from . import douyin_gallery
-from .assets_api import ASSET_DB
+from .storage_contract import ASSET_DB
 from .service_auth import GatewayRoleMiddleware
 
 app = FastAPI(title='Douyin Gallery API', docs_url=None, redoc_url=None)

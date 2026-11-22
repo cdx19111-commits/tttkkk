@@ -12,9 +12,9 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 
-from .assets_api import ASSET_DB, ASSET_ROOT
+from .storage_contract import ASSET_DB, ASSET_ROOT
 from .business_review import _require_login
-from . import coverage_monitor
+from .storage_contract import read_gaia_pool
 from .coverage_engine import _norm
 
 router = APIRouter(prefix="/api/v1/pool-management", tags=["image pools"])
@@ -314,7 +314,7 @@ def move_asset(asset_id: str, payload: dict, request: Request):
                     or not str(current.get("standard_color") or "").strip()
                     or str(current.get("match_status") or "").strip() not in {"已匹配", "matched", "confirmed"}):
                 conn.rollback(); raise HTTPException(422, "进入 A 池前须补齐准确型号、标准颜色和已匹配状态")
-            gaia_model = next((m for m in coverage_monitor._pool().get("models", [])
+            gaia_model = next((m for m in read_gaia_pool().get("models", [])
                                if str(m.get("model_id", "")).strip() == str(current["model_id"]).strip()), None)
             gaia_colors = [str(c).strip() for c in (gaia_model or {}).get("colors", []) if str(c).strip()]
             if not gaia_model or str(current["standard_color"]).strip() not in gaia_colors:

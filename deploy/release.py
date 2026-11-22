@@ -96,7 +96,12 @@ class Docker:
         return run(['docker', 'image', 'inspect', '--format', '{{.Id}}', image])
 
     def build(self, module, source, tag, base, offline=False):
-        args = ['docker', 'build', '--build-arg', 'BASE_IMAGE=' + base, '-f', str(source / SERVICES[module][0]), '-t', tag]
+        args = ['docker', 'build', '--build-arg', 'BASE_IMAGE=' + base, '-f', str(source / SERVICES[module][0]), '-t', tag,
+                '--label', 'com.aihuishou.gallery.module=' + module,
+                '--label', 'com.aihuishou.gallery.release=' + tag]
+        manifest_path = source / 'release-source.json'
+        if manifest_path.is_file():
+            args += ['--label', 'org.opencontainers.image.revision=' + json.loads(manifest_path.read_text())['commit']]
         env = dict(os.environ)
         if offline:
             # Legacy builder accepts exact local image IDs without registry resolution.

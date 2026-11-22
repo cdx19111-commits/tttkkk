@@ -13,7 +13,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 
-from .assets_api import ASSET_DB, ASSET_ROOT
+from .storage_contract import ASSET_DB, ASSET_ROOT
 
 router = APIRouter(prefix="/api/v1/douyin-gallery", tags=["douyin gallery"])
 ASSET_DIR = ASSET_ROOT / "douyin_main_images"

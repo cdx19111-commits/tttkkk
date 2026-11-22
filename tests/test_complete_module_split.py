@@ -120,3 +120,26 @@ def test_gateway_docs_is_only_a_redirect_to_versioned_frontend(monkeypatch,tmp_p
     assert 'fetch(choice.value' in (docs/'module.js').read_text()
     assert 'SwaggerUIBundle' in (docs/'module.js').read_text()
     assert 'swagger-ui' in (docs/'index.html').read_text()
+
+
+def test_integration_model_matching_does_not_merge_pro_or_max(monkeypatch):
+    models=[{'model_id':'base','model':'苹果 iPhone 13','brand':'Apple'},
+            {'model_id':'pro','model':'苹果 iPhone 13 Pro','brand':'Apple'}]
+    monkeypatch.setattr(listing_api,'_gaia_pool',lambda:(models,{m['model_id']:m for m in models}))
+    model,level,_=listing_api._resolve_model('', '苹果', 'iPhone 13')
+    assert model['model_id']=='base'
+    model,level,_=listing_api._resolve_model('', '苹果', 'iPhone 13 Pro')
+    assert model['model_id']=='pro'
+    assert listing_api._resolve_model('', '苹果','iPhone 13 Pro Max')[1]=='not_found'
+
+
+def test_runtime_images_do_not_include_another_services_route_module():
+    root=Path(__file__).parents[1]
+    gateway=(root/'Dockerfile').read_text()
+    assert 'COPY app /app/app' not in gateway
+    assert all('app/'+name+'.py' not in gateway for name in ('assets_api','business_review','pool_management','douyin_gallery','listing_api'))
+    for name in ('governance','douyin','integration','coverage'):
+        recipe=(root/('Dockerfile.'+name+'-api')).read_text()
+        assert 'app/storage_contract.py' in recipe
+        assert 'app/assets_api.py' not in recipe
+        assert 'app/main.py' not in recipe
