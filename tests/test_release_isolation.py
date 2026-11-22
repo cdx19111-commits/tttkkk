@@ -69,6 +69,8 @@ def test_failed_switch_restores_target_only(tmp_path):
         r.apply_backend(tmp_path / 'host', 'coverage-api', OLD, 'failure', source(tmp_path), BASE, docker=docker)
     record = json.loads((tmp_path / 'host/release-state/backend/coverage-api/failure/release.json').read_text())
     assert record['status'] == 'failed_restored'
+    assert record['image'] == OLD
+    assert record['attempted_image'] == NEW
     assert docker.state['coverage-api']['image'] == OLD
     assert docker.state['gallery'] == before['gallery']
     assert docker.state['white-gallery-api'] == before['white-gallery-api']
@@ -139,3 +141,18 @@ def test_clean_coverage_image_explicitly_includes_parameter_dependencies():
     assert "app/categories.py" in dockerfile
     assert "COPY app/static/model_params.json" in dockerfile
     assert 'RUN python -c "import app.coverage_service"' in dockerfile
+
+
+def test_offline_build_is_bounded_and_has_no_network(tmp_path, monkeypatch):
+    captured = {}
+    def fake_run(args, **kwargs):
+        captured.update(args=args, **kwargs)
+        return type('Result', (), {'returncode': 0})()
+    monkeypatch.setattr(r.subprocess, 'run', fake_run)
+    d = r.Docker(tmp_path)
+    monkeypatch.setattr(d, 'image_id', lambda _tag: NEW)
+    assert d.build('coverage-api', tmp_path, 'target:release', OLD, offline=True) == NEW
+    assert '--network=none' in captured['args']
+    assert 'PIP_OFFLINE=1' in captured['args']
+    assert captured['env']['DOCKER_BUILDKIT'] == '0'
+    assert captured['timeout'] == 300

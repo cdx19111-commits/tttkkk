@@ -120,11 +120,14 @@ def apply_backend(root, module, expected, release_id, source=None, base=None, ro
     with locked(state / 'locks' / (module + '.lock')):
         before = docker.snapshot()
         old = before[module]['image']
+        current_path = state / 'backend' / module / 'current.json'
+        current_record = json.loads(current_path.read_text()) if current_path.is_file() else {}
+        previous_commit = current_record.get('commit') if current_record.get('image') == old else None
         if old != expected: raise ValueError('Stale baseline: running target image changed; integrate before publishing')
         if any(v['health'] != 'healthy' for v in before.values()): raise ValueError('Services must be healthy before release')
         release_dir = state / 'backend' / module / release_id
         release_dir.mkdir(parents=True, exist_ok=False)
-        record = {'module': module, 'release': release_id, 'previous_image': old, 'before': before, 'status': 'preparing', 'ui_verified': False}
+        record = {'module': module, 'release': release_id, 'previous_image': old, 'previous_commit': previous_commit, 'before': before, 'status': 'preparing', 'ui_verified': False}
         record_path = release_dir / 'release.json'
         atomic_json(record_path, record)
         switching = False
@@ -145,6 +148,11 @@ def apply_backend(root, module, expected, release_id, source=None, base=None, ro
                 image = docker.build(module, frozen, SERVICES[module][2] + ':' + release_id, base, offline=offline)
             else:
                 image = docker.image_id(rollback_image)
+                for history in sorted((state / 'backend' / module).glob('*/release.json')):
+                    entry = json.loads(history.read_text())
+                    if entry.get('image') == image and entry.get('commit') and entry.get('status') in {'deployed_unverified', 'verified'}:
+                        record['commit'] = entry['commit']
+                        record['restored_from_release'] = entry['release']
             if not IMAGE.fullmatch(image): raise ValueError('Invalid resolved image ID')
             now = docker.snapshot()
             if now[module] != before[module]: raise ValueError('Target changed during build; refusing switch')
@@ -169,6 +177,9 @@ def apply_backend(root, module, expected, release_id, source=None, base=None, ro
                     restored = docker.snapshot()
                     if restored[module]['image'] != old or restored[module]['health'] != 'healthy': raise RuntimeError('Restore failed')
                     record['status'] = 'failed_restored'
+                    record['attempted_image'] = record.get('image')
+                    record['image'] = old
+                    record['commit'] = previous_commit
                     record['after'] = restored
                     atomic_json(state / 'backend' / module / 'current.json', record)
                 except Exception:
