@@ -107,7 +107,7 @@ def asset_pools():
 
 
 @router.get("/coverage-module/model-asset-table")
-def model_asset_table(q: str = "", offset: int = Query(0, ge=0),
+def model_asset_table(q: str = "", brand: str = "", model_id: str = "", color: str = "", options: bool = False, offset: int = Query(0, ge=0),
                       limit: int = Query(25, ge=1, le=100)):
     """One row per Gaia model, using the existing trusted white coverage rules."""
     pool = _pool()
@@ -118,6 +118,9 @@ def model_asset_table(q: str = "", offset: int = Query(0, ge=0),
     needle = _key(q)
     models = [m for m in pool["models"] if not needle or needle in _key(
         str(m.get("brand", "")) + str(m.get("model", "")) + str(m.get("model_id", "")) + " ".join(m.get("colors", [])))]
+    if options:
+        return {"options": [{"model_id":str(m["model_id"]),"brand":m.get("brand", ""),"model":m.get("model", ""),"colors":m.get("colors", [])} for m in pool["models"]]}
+    models = [m for m in models if (not brand or m.get("brand") == brand) and (not model_id or str(m["model_id"]) == model_id) and (not color or color in m.get("colors", []))]
     items = []
     for model in models[offset:offset + limit]:
         mid = str(model["model_id"])
