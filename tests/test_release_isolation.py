@@ -139,8 +139,35 @@ def test_clean_coverage_image_explicitly_includes_parameter_dependencies():
     dockerfile = (Path(__file__).parents[1] / "Dockerfile.coverage-api").read_text()
     assert "app/storage_contract.py" in dockerfile
     assert "app/model_parameters.py" in dockerfile
-    assert "COPY app/static/model_params.json" in dockerfile
     assert 'RUN python -c "import app.coverage_service"' in dockerfile
+
+
+PARAM_MOUNT = "./data/model_params/current/model_params.json:/app/app/static/model_params.json:ro"
+
+
+def test_model_params_are_mounted_not_baked_into_images():
+    """参数文件只读挂载：镜像里不再复制真实数据，改参数不需要重建镜像。"""
+    root = Path(__file__).parents[1]
+    images = {
+        "Dockerfile": "gateway",
+        "Dockerfile.white-api": "white-gallery-api",
+        "Dockerfile.coverage-api": "coverage-api",
+        "Dockerfile.governance-api": "governance-api",
+        "Dockerfile.douyin-api": "douyin-api",
+        "Dockerfile.integration-api": "integration-api",
+    }
+    for name in images:
+        text = (root / name).read_text()
+        assert "COPY app/static/model_params.json" not in text, f"{name} 仍把参数文件复制进镜像"
+        assert "touch /app/app/static/model_params.json" in text, f"{name} 缺少挂载占位文件"
+
+    ignore = (root / ".dockerignore").read_text()
+    assert "app/static/model_params.json" in ignore, "构建上下文未排除参数文件"
+
+    for name in ("compose.yaml", "deploy/white-gallery-api.compose.yaml",
+                 "deploy/coverage-api.compose.yaml", "deploy/governance-api.compose.yaml",
+                 "deploy/douyin-api.compose.yaml", "deploy/integration-api.compose.yaml"):
+        assert PARAM_MOUNT in (root / name).read_text(), f"{name} 缺少参数文件只读挂载"
 
 
 def test_offline_build_is_bounded_and_has_no_network(tmp_path, monkeypatch):

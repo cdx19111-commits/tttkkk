@@ -7,6 +7,7 @@ services:
       - THUMB_DIR=/tmp/gallery-thumbs
       - GAIA_MODEL_POOL_PATH=/app/gaia_runtime/gaia_model_pool.json
     volumes:
+      - ./data/model_params/current/model_params.json:/app/app/static/model_params.json:ro
       - ./v03data:/data/v03:ro
       - ./app/gaia_runtime:/app/gaia_runtime:ro
     tmpfs:

@@ -14,6 +14,7 @@ services:
       - white-gallery-internal
       - coverage-internal
     volumes:
+      - ./data/model_params/current/model_params.json:/app/app/static/model_params.json:ro
       - ./runtime:/app/runtime
       - ./frontend-modules:/app/frontend-modules:ro
       - ./app/gaia_runtime:/app/gaia_runtime:ro

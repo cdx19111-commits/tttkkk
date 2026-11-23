@@ -7,6 +7,7 @@ services:
       - THUMB_DIR=/tmp/gallery-thumbs
       - DOUYIN_READ_ONLY=1
     volumes:
+      - ./data/model_params/current/model_params.json:/app/app/static/model_params.json:ro
       - ./v03data:/data/v03:ro
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
