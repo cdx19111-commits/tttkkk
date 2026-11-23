@@ -104,3 +104,30 @@ def asset_pools():
                           "asset_count": int(images), "folder_count": int(folders), "size_bytes": int(size_bytes),
                           "storage": "douyin_gallery_items / douyin_gallery_folders"})
     return data
+
+
+@router.get("/coverage-module/model-asset-table")
+def model_asset_table(q: str = "", offset: int = Query(0, ge=0),
+                      limit: int = Query(25, ge=1, le=100)):
+    """One row per Gaia model, using the existing trusted white coverage rules."""
+    pool = _pool()
+    gallery, excluded = white_pool_rows(_phone_rows())
+    by_model = {}
+    for row in gallery:
+        by_model.setdefault(row["_model_id"], []).append(row)
+    needle = _key(q)
+    models = [m for m in pool["models"] if not needle or needle in _key(
+        str(m.get("brand", "")) + str(m.get("model", "")) + str(m.get("model_id", "")) + " ".join(m.get("colors", [])))]
+    items = []
+    for model in models[offset:offset + limit]:
+        mid = str(model["model_id"])
+        colors = list(dict.fromkeys(str(c).strip() for c in model.get("colors", []) if str(c).strip()))
+        images = [{"id": row["id"], "color": row.get("standard_color", ""),
+                   "thumb_url": f"/api/v1/images/{row['id']}/file?w=160",
+                   "file_url": f"/api/v1/images/{row['id']}/file"} for row in by_model.get(mid, [])]
+        present = {_key(image["color"]) for image in images}
+        items.append({**model, "model_id": mid, "colors": colors, "images": images,
+                      "missing_colors": [color for color in colors if _key(color) not in present],
+                      "model_params": model_params_for(mid)})
+    return {"total": len(models), "items": items, "gaia_snapshot_at": pool.get("generated_at"),
+            "gallery_mode": "live_read_only", "excluded": excluded}

@@ -178,3 +178,14 @@ def test_frontend_module_current_symlink_cannot_escape_module_root(tmp_path, mon
     monkeypatch.setattr(main, "FRONTEND_MODULE_ROOT", tmp_path)
     assert main._module_current_dir("coverage") is None
 
+
+def test_model_table_keeps_full_models_and_strict_color_coverage(monkeypatch):
+    monkeypatch.setattr(coverage_monitor, 'model_params_for', lambda mid: [{'name':'CPU','value':'test'}])
+    result = coverage_monitor.model_asset_table(q='', offset=0, limit=25)
+    assert result['total'] == 1
+    row = result['items'][0]
+    assert row['colors'] == ['黑色', '白色']
+    assert row['missing_colors'] == ['白色']
+    assert [image['id'] for image in row['images']] == ['white-a']
+    assert row['model_params'][0]['value'] == 'test'
+    assert coverage_monitor.model_asset_table(q='does-not-exist', offset=0, limit=25)['total'] == 0
