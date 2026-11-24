@@ -1,25 +1,26 @@
+# 图库项目唯一编排文件（2026-11-24 合并，取代 compose.target.yaml / compose.release.yaml）
+#
+# - 6 个服务全部在此定义：网关 gallery + 5 个独立 API 服务。
+# - 网关对外端口固定 0.0.0.0:18090（HTTP，团队内部使用；不启用域名与 HTTPS 属既定选择）。
+# - image 使用生产实际运行的不可变标签；新机不在此构建镜像，发布走 deploy/release-target.sh 做镜像直切。
+# - 数据与配置通过只读挂载提供，不烘进镜像。
 services:
   gallery:
-    build:
-      context: .
-      args:
-        BASE_IMAGE: ${BACKEND_BASE_IMAGE:-python@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea}
+    image: gallery-gateway:full-final-gateway
     env_file:
       - .env
     ports:
-      # 默认仅本机可达，用 SSH 隧道或 HTTPS 反向代理访问
-      - "127.0.0.1:${GALLERY_PORT:-18080}:8000"
+      - "0.0.0.0:18090:8000"
     networks:
       - default
       - white-gallery-internal
       - coverage-internal
     volumes:
-      - ./data/model_params/current/model_params.json:/app/app/static/model_params.json:ro
       - ./runtime:/app/runtime
       - ./frontend-modules:/app/frontend-modules:ro
       - ./app/gaia_runtime:/app/gaia_runtime:ro
-      # 图片资产库（V0.3）：图片文件 + gallery.db，只由入库脚本写入
       - ./v03data:/data/v03
+      - ./data/model_params/current/model_params.json:/app/app/static/model_params.json:ro
     environment:
       - ASSET_ROOT=/data/v03
       - THUMB_DIR=/data/v03/thumbs
@@ -31,6 +32,110 @@ services:
       interval: 30s
       timeout: 8s
       retries: 3
+
+  white-gallery-api:
+    image: gallery-white-api:collab-1ffe5ae-white
+    environment:
+      - ASSET_ROOT=/data/v03
+      - THUMB_DIR=/tmp/gallery-thumbs
+    volumes:
+      - ./data/model_params/current/model_params.json:/app/app/static/model_params.json:ro
+      - ./v03data:/data/v03:ro
+    tmpfs:
+      - /tmp/gallery-thumbs:rw,noexec,nosuid,size=512m
+    networks:
+      - white-gallery-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 8s
+      retries: 3
+
+  coverage-api:
+    image: gallery-coverage-api:a-model-filters-20261123
+    environment:
+      - ASSET_ROOT=/data/v03
+      - GAIA_MODEL_POOL_PATH=/app/gaia_runtime/gaia_model_pool.json
+    volumes:
+      - ./data/model_params/current/model_params.json:/app/app/static/model_params.json:ro
+      - ./v03data:/data/v03:ro
+      - ./app/gaia_runtime:/app/gaia_runtime:ro
+    networks:
+      - coverage-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 8s
+      retries: 3
+
+  douyin-api:
+    image: gallery-douyin-api:full-final-douyin
+    read_only: true
+    environment:
+      - ASSET_ROOT=/data/v03
+      - THUMB_DIR=/tmp/gallery-thumbs
+      - DOUYIN_READ_ONLY=1
+    volumes:
+      - ./data/model_params/current/model_params.json:/app/app/static/model_params.json:ro
+      - ./v03data:/data/v03:ro
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    networks:
+      - white-gallery-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=5)"]
+      interval: 10s
+      timeout: 8s
+      retries: 3
+
+  governance-api:
+    image: gallery-governance-api:full-final-governance
+    read_only: true
+    environment:
+      - ASSET_ROOT=/data/v03
+      - THUMB_DIR=/tmp/gallery-thumbs
+      - GAIA_MODEL_POOL_PATH=/app/gaia_runtime/gaia_model_pool.json
+    volumes:
+      - ./data/model_params/current/model_params.json:/app/app/static/model_params.json:ro
+      - ./v03data:/data/v03
+      - ./app/gaia_runtime:/app/gaia_runtime:ro
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    networks:
+      - white-gallery-internal
+      - coverage-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=5)"]
+      interval: 10s
+      timeout: 8s
+      retries: 3
+
+  integration-api:
+    image: gallery-integration-api:full-final-integration
+    read_only: true
+    environment:
+      - ASSET_ROOT=/data/v03
+      - THUMB_DIR=/tmp/gallery-thumbs
+      - GAIA_MODEL_POOL_PATH=/app/gaia_runtime/gaia_model_pool.json
+    volumes:
+      - ./data/model_params/current/model_params.json:/app/app/static/model_params.json:ro
+      - ./v03data:/data/v03:ro
+      - ./app/gaia_runtime:/app/gaia_runtime:ro
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    networks:
+      - white-gallery-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=5)"]
+      interval: 10s
+      timeout: 8s
+      retries: 3
+
 networks:
   white-gallery-internal:
     external: true

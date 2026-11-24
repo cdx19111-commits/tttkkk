@@ -16,12 +16,14 @@ import tempfile
 from datetime import datetime, timezone
 
 SERVICES = {
+    # 2026-11-24 起 compose.yaml 已是包含全部 6 个服务的唯一编排，
+    # 因此第二项（模块级 compose 追加文件）统一为 None，不再叠加 deploy/*.compose.yaml。
     'gallery': ('Dockerfile', None, 'gallery-gateway'),
-    'white-gallery-api': ('Dockerfile.white-api', 'deploy/white-gallery-api.compose.yaml', 'gallery-white-api'),
-    'coverage-api': ('Dockerfile.coverage-api', 'deploy/coverage-api.compose.yaml', 'gallery-coverage-api'),
-    'governance-api': ('Dockerfile.governance-api', 'deploy/governance-api.compose.yaml', 'gallery-governance-api'),
-    'douyin-api': ('Dockerfile.douyin-api', 'deploy/douyin-api.compose.yaml', 'gallery-douyin-api'),
-    'integration-api': ('Dockerfile.integration-api', 'deploy/integration-api.compose.yaml', 'gallery-integration-api'),
+    'white-gallery-api': ('Dockerfile.white-api', None, 'gallery-white-api'),
+    'coverage-api': ('Dockerfile.coverage-api', None, 'gallery-coverage-api'),
+    'governance-api': ('Dockerfile.governance-api', None, 'gallery-governance-api'),
+    'douyin-api': ('Dockerfile.douyin-api', None, 'gallery-douyin-api'),
+    'integration-api': ('Dockerfile.integration-api', None, 'gallery-integration-api'),
 
 }
 OPTIONAL_SERVICES = {'governance-api', 'douyin-api', 'integration-api'}
@@ -72,9 +74,19 @@ class Docker:
         self.root = Path(root).resolve()
 
     def compose(self, module, override=None):
-        args = ['docker', 'compose', '--project-directory', str(self.root), '-p', 'gallery-mvp', '-f', str(self.root / 'compose.yaml')]
-        extra = SERVICES[module][1]
-        if extra: args += ['-f', str(self.root / extra)]
+        args = ['docker', 'compose', '--project-directory', str(self.root), '-p', 'gallery-mvp']
+        # GALLERY_COMPOSE_FILES 允许整机改用一份完整编排（如新机的 compose.target.yaml），
+        # 此时不再叠加 deploy/*.compose.yaml，避免同名服务被二次覆盖或被改回仅本机可达端口。
+        combined = (os.environ.get('GALLERY_COMPOSE_FILES') or '').strip()
+        if combined:
+            for name in combined.split(':'):
+                if name.strip():
+                    path = Path(name.strip())
+                    args += ['-f', str(path if path.is_absolute() else self.root / path)]
+        else:
+            args += ['-f', str(self.root / 'compose.yaml')]
+            extra = SERVICES[module][1]
+            if extra: args += ['-f', str(self.root / extra)]
         if override: args += ['-f', str(override)]
         return args
 
@@ -124,11 +136,14 @@ def assert_others_unchanged(before, after, target):
             raise RuntimeError('Non-target service changed: ' + module + '; do not overwrite it')
 
 
-def apply_backend(root, module, expected, release_id, source=None, base=None, rollback_image=None, docker=None, offline=False, bootstrap=False):
+def apply_backend(root, module, expected, release_id, source=None, base=None, rollback_image=None, docker=None, offline=False, bootstrap=False, publish_image=None):
     validate_name(release_id)
     if not (IMAGE.fullmatch(expected) or (bootstrap and expected == 'none' and module in OPTIONAL_SERVICES)):
         raise ValueError('Expected image must be exact; none requires explicit new-service bootstrap')
     if rollback_image is not None and not IMAGE.fullmatch(rollback_image): raise ValueError('Rollback requires an exact image ID')
+    if publish_image is not None:
+        if rollback_image is not None: raise ValueError('Use either a publish image or a rollback image, not both')
+        if not IMAGE.fullmatch(publish_image): raise ValueError('Publish image must be an exact image ID')
     root = Path(root).resolve()
     docker = docker or Docker(root)
     state = root / 'release-state'
@@ -152,7 +167,11 @@ def apply_backend(root, module, expected, release_id, source=None, base=None, ro
         atomic_json(record_path, record)
         switching = False
         try:
-            if rollback_image is None:
+            if publish_image is not None:
+                # 镜像直切：镜像在别处构建好并已 docker load，本机只切换不构建。
+                image = docker.image_id(publish_image)
+                record['mode'] = 'image'
+            elif rollback_image is None:
                 source = Path(source).resolve()
                 manifest = json.loads((source / 'release-source.json').read_text())
                 if not re.fullmatch(r'[a-f0-9]{40}', manifest.get('commit', '')): raise ValueError('Missing source commit')
@@ -283,8 +302,9 @@ def main():
         p.add_argument('--expected-image', required=True)
         p.add_argument('--release', required=True)
         if action == 'backend-publish':
-            p.add_argument('--source', required=True)
-            p.add_argument('--base-image', required=True)
+            p.add_argument('--source')
+            p.add_argument('--base-image')
+            p.add_argument('--image')
             p.add_argument('--offline', action='store_true')
             p.add_argument('--bootstrap', action='store_true')
         else: p.add_argument('--image', required=True)
@@ -297,7 +317,18 @@ def main():
         if action == 'frontend-publish': p.add_argument('--package', required=True)
     a = parser.parse_args()
     if a.action.startswith('backend'):
-        result = apply_backend(a.root, a.module, a.expected_image, a.release, source=getattr(a, 'source', None), base=getattr(a, 'base_image', None), rollback_image=getattr(a, 'image', None), offline=getattr(a, 'offline', False), bootstrap=getattr(a, 'bootstrap', False))
+        if a.action == 'backend-rollback':
+            result = apply_backend(a.root, a.module, a.expected_image, a.release, rollback_image=a.image)
+        else:
+            if bool(a.image) == bool(a.source):
+                print('backend-publish 需要 --source 与 --base-image（构建发布），或只给 --image（镜像直切），二选一', file=sys.stderr)
+                sys.exit(1)
+            if a.source and not a.base_image:
+                print('使用 --source 构建发布时必须同时给 --base-image', file=sys.stderr)
+                sys.exit(1)
+            result = apply_backend(a.root, a.module, a.expected_image, a.release,
+                                   source=a.source, base=a.base_image,
+                                   offline=a.offline, bootstrap=a.bootstrap, publish_image=a.image)
         print(json.dumps({k: result.get(k) for k in ('module', 'release', 'status', 'previous_image', 'image', 'commit')}, ensure_ascii=False))
     else:
         print(json.dumps(frontend(a.root, a.module, a.version, a.expected_current, getattr(a, 'package', None), a.action == 'frontend-rollback'), ensure_ascii=False))

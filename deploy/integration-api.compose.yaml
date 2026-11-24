@@ -1,3 +1,4 @@
+# [已废弃 2026-11-24] 服务定义已并入根目录 compose.yaml；本文件不再被 release.py 引用，仅作历史参考。
 services:
   integration-api:
     image: gallery-integration-api:module-split-v1
