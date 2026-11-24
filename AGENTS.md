@@ -143,6 +143,20 @@
 - 用户提出“调盖亚 API”时，先检查项目 `tools/gaia/` 客户端与本机凭据配置，直接使用已配置身份调用；按 `tools/gaia/client.py` 的分页、限流和断点规则执行。先用小请求确认接口字段及过滤条件，再开始全量读取。
 - 价格规则 API 返回货品行，不自动等同有效标准 SKU 色集。颜色治理必须确认响应记录的有效性口径及标准 SKU 字段；不以品牌官网、图片颜色或低频次数替代盖亚标准 SKU 依据。
 
+## 飞书 CLI（lark-cli，本机已可用）
+
+本机已装飞书 CLI，可直接以用户身份读写飞书云盘、文档、多维表格与消息。**详细操作手册见工作区根目录 `飞书CLI_新Agent使用指令.md`，动手前先读它。**
+
+- 可执行文件：`/Users/a161959/.local/bin/lark-cli`（v1.0.100）。脚本里用绝对路径，别依赖 PATH。
+- 应用：`cli_aa60740cffb85cb7`（「常紫棋的飞书 CLI」），企业域 `atrenew.feishu.cn`。
+- 身份：**默认 `--as user`（常紫棋）**。bot 可读群消息，但列云盘会报 `99991672`（缺 `drive:drive`），不要用 bot 遍历云盘。
+- 凭据：DPoP + macOS Keychain，不落盘。access_token 约 2 小时、refresh_token 约 7 天；过期后由用户执行 `lark-cli auth login`（必要时 `auth qrcode`）扫码续期，不要反复重试刷接口。
+- 上手自检（依次）：`lark-cli --version`、`whoami`、`auth status`（user 为 `ready` 且 `tokenStatus=valid` 才可用）、`doctor`。
+- 调用约定：优先 `+` 开头的 shortcut；不确定参数先 `schema` / `--help`；试探先 `--dry-run`；输出统一 `--format json`。`--help` 标注的 `Risk: write` / `high-risk-write` 必须先说明影响并取得用户确认。
+- 已知定位符：商品图库管理系统根 `HqzpfIsETl4YwqdcIXjc3QbYnzd`；白底图库 `ET9Pf5Z7ulTOSzdmkYbcC5h7nIp`。一律以 `token` / `parent_token` 为唯一键，不要用路径（存在同名目录）。
+- 硬限制：`files.list` 不返回文件大小（只有 `+download` 返回 `size_bytes`）；没有图片直链；没有自定义标签；约 12% 文件扩展名与真实编码不符；无变更事件订阅，增量只能靠 `modified_time` 轮询。
+- 安全边界：token / secret 不打印、不落盘、不进 Git；云盘文件的移动、覆盖、删除属写操作，执行前先确认。
+
 ## 生产服务器访问与应用发布
 
 线上图库自 2026-11-24 起运行在团队阿里云 ECS **`47.95.20.94`**（实例 `i-2zeggtx23lhc2bkglaqf`，`cn-beijing`，4C8G，Ubuntu 22.04）。**旧机 `81.70.51.32`（SSH 别名 `personal-cloud`）已降级为回滚副本，不再是发布目标，不得再往上改任何东西。**
