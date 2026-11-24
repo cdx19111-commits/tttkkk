@@ -10,7 +10,7 @@
 #     deploy/release-target.sh backend-publish <module> \
 #       --expected-image sha256:<目标当前镜像> --image sha256:<已 load 的新镜像> \
 #       --release <唯一版本号>
-#   构建发布（新机当前不具备条件：缺 3 个 Dockerfile 与基础镜像）：
+#   构建发布（服务器缺 Dockerfile 副本与基础镜像；仓库里 6 个 Dockerfile 齐全，补齐后可用）：
 #     deploy/release-target.sh backend-publish <module> \
 #       --source <源码包目录> --base-image sha256:<固定基础镜像> --offline ...
 #   回滚：
