@@ -6,8 +6,9 @@
 
 ## 开发规范
 
-- 当前合作基线为 `codex/gallery-collaboration-20261122`，从该分支建立任务分支/工作区；历史 main 未提交目录保留，不得整套覆盖生产。生产模块发布只使用本分支 `deploy/release.py` 及其包装脚本。
+- 当前已核验合作基线在 Git 分支 `codex/gallery-collaboration-20261122`，对应本聊天挂载的 `gallery-collaboration` 工作区。原 main 和其它工作区保留未整合历史改动，禁止拿原 main 整套覆盖生产；后续功能从合作分支起步。生产模块发布只使用本分支 `deploy/release.py` 及其包装脚本。
 - 协作改版只维护应用仓库的 `项目日志.md`，记录负责人、业务结果、代码提交、模块版本、发布/回滚及验收证据、待办。Git 保存代码，日志保存交付状态；未提交不等于未上线。不再建立单独的协作入口、整改计划或任务日志模板。
+- 用户会用多个 agent 并行开工，`项目日志.md` 随时可能有其它会话追加的条目；不要当作异常，也不要在提交时整份覆盖——只追加或定点修改自己那部分。
 
 - 开始任务前检查项目实际结构、Git 状态，以及其他并行 Agent 的工作；当前环境无法检查时，明确记录限制并保护共享文件。
 - 优先复用现有架构，采用最小必要改动。
@@ -43,9 +44,11 @@
 - 先明确每份数据的权威来源、生成时间、格式版本和消费者；程序需校验数据结构与版本，缺失或损坏时保留上一份可用数据并报告状态。
 - 这不等于把生产图库数据库按功能拆成多份。正式图片、图库关系和审核结果继续以现有生产数据库/存储为权威；只有明确的数据隔离、扩展或故障边界收益时才评估拆库。
 - 程序、数据、业务数据库分别发布和回滚；更新任一项不得覆盖其它并行任务的版本，也不得把只读数据更新误做成生产业务写库。
-- 镜像保留：每个后端服务只保留「当前运行镜像」和「上一个已验证可运行镜像」两个回滚点，确认两者均健康且可启动后，其余历史镜像可清理。固定共享运行时基础镜像（`gallery-python-runtime:*`）是离线构建底座，任何情况下不得删除，否则后续无法发布。清理只针对 `gallery-*`，不动 `enterprise-rag-*` 等其它项目的镜像与容器；删除前记录被删标签和当前清单。前端模块旧版本目录（每个几 MB）按模块各自保留，不随镜像一起清理。
+- 镜像保留：每个后端服务只保留「当前运行镜像」和「上一个已验证可运行镜像」两个回滚点，确认两者均健康且可启动后，其余历史镜像可清理。固定共享运行时基础镜像（`gallery-python-runtime:*` 或 pinned 的 `python@sha256:…`）是离线构建底座，任何情况下不得删除，否则后续无法发布。清理只针对 `gallery-*`，不动同机其它项目（`ops_dashboard_*`、`atrenew-*`、`feishu_kb_*`）的镜像与容器；删除前记录被删标签和当前清单。前端模块旧版本目录（每个几 MB）按模块各自保留，不随镜像一起清理。
 - 当前 Gaia 型号池已由 `app/gaia_runtime` 只读挂载提供；型号参数 JSON 已改为独立只读挂载 `/opt/gallery-mvp/data/model_params/current/model_params.json`（版本目录 + `current` 软链），镜像内只留空占位文件，`.dockerignore` 排除真实文件，改参数不再需要重建镜像。切换 `current` 后必须重建对应容器才生效；更新前保留上一版本目录以便回滚。
 - Gaia 手机型号池由公司 Mac 的 LaunchAgent `com.aihuishou.gaia-pool-refresh` 在每天 12:00–18:00 每小时尝试一次：使用现有分页 API 客户端和 `tools/gaia/build_model_pool.py`，从权限为 0600 的用户配置文件读取凭据；读取 macOS 当前系统代理设置。完整校验后通过 SSH 原子替换生产 `/opt/gallery-mvp/app/gaia_runtime/gaia_model_pool.json`，同时更新本地 `data/v03/gaia_model_pool.json` 并保留最近 14 份服务器快照。当天已成功后跳过其余触发；刷新失败、校验失败或 VPN 不通时保留旧快照并记录安全错误类别。该任务依赖 Mac 用户会话、公司电脑在线及京东 VPN 可达；生产图库数据库保持只读。服务器旧的 03:20 systemd 刷新定时器已停用，避免重复失败。
+
+- **2026-11-24 已修复（原「与新生产脱节」问题）**：`refresh_and_publish.py` 的推送主机改为 `PUBLISH_HOST`（默认 SSH 别名 `gallery-target`，可用 `GAIA_PUBLISH_HOST` 覆盖，例如临时回推旧机）；`build_model_pool.py` 已按「型号存在『是否双维成色=是』行时只用『是』行颜色；完全无『是』行时保持原样」过滤（`parse.py` 的 `FIELD_MAP` 增补 `dual_dimension`）。本地 `data/v03/gaia_model_pool.json` 已同步为过滤后的 6,546 组合，避免 `validate()` 的 20% 下跌保护误拦首次过滤结果。离线用 114 页原始数据重算得 2,041 型号 / 6,544 组合（与生产 6,546 差 2 个，生产池为 115 次请求）。
 
 #### 历史迁移记录（2026-11-20；当前版本查项目日志与生产实际指向）
 
@@ -133,24 +136,26 @@
 
 今后用户提出新的长期工作习惯时，主动判断是否适合写入本文件。避免重复规则，保持简洁，防止长期膨胀。新增或调整规则时保留仍有效的内容，并作增量更新。
 
+## 盖亚 API 调用
+
+- 拍拍盖亚网关地址由 `tools/gaia/config.py` 的 `GATEWAY` 管理；当前价格规则货品分页 API 名称为 `sale.bigdata.yx.price.rule`，调用者邮箱为 `roy.wang@atrenew.com`。
+- 凭据保存在本机权限受限文件 `/Users/a161959/.config/gaia/gaia.env`（目录 0700、文件 0600），调用前由 `tools/gaia/refresh_daily.sh` 加载。不得把 Token 写入 Agent 文件、源码、日志、命令输出或交付文件；不得要求用户重复提供已配置凭据。
+- 用户提出“调盖亚 API”时，先检查项目 `tools/gaia/` 客户端与本机凭据配置，直接使用已配置身份调用；按 `tools/gaia/client.py` 的分页、限流和断点规则执行。先用小请求确认接口字段及过滤条件，再开始全量读取。
+- 价格规则 API 返回货品行，不自动等同有效标准 SKU 色集。颜色治理必须确认响应记录的有效性口径及标准 SKU 字段；不以品牌官网、图片颜色或低频次数替代盖亚标准 SKU 依据。
+
 ## 生产服务器访问与应用发布
 
-需要查看线上图库数据时，用本机 SSH 别名 `personal-cloud`（密钥认证，已配好，无需询问凭据）。
+线上图库自 2026-11-24 起运行在团队阿里云 ECS **`47.95.20.94`**（实例 `i-2zeggtx23lhc2bkglaqf`，`cn-beijing`，4C8G，Ubuntu 22.04）。**旧机 `81.70.51.32`（SSH 别名 `personal-cloud`）已降级为回滚副本，不再是发布目标，不得再往上改任何东西。**
 
+- 访问方式：本机 SSH 别名 **`gallery-target`**（`HostName 47.95.20.94`、`User root`、`IdentityFile ~/.ssh/gallery_target_ed25519`）已可用，可直接 `ssh gallery-target`。该公钥在 `/root/.ssh/authorized_keys` 里带标记 `dsh-gallery-target-20261124`，撤销只需删这一行。没有这把密钥时用阿里云云助手（ECS `RunCommand`，root）操作。旧机仍可用 `personal-cloud` 只读查看，但不得改动。
 - 项目根：`/opt/gallery-mvp`；生产库：`/opt/gallery-mvp/v03data/gallery.db`；应用代码：`/opt/gallery-mvp/app`。
-- 应用容器：`gallery-mvp-gallery-1`。同机还有 `enterprise-rag-copilot-*` 等其它项目，一律不得触碰。
+- 应用容器：`gallery-mvp-gallery-1` 等 6 个（gallery、white-gallery-api、coverage-api、douyin-api、governance-api、integration-api）。新机同机还有 `ops_dashboard_*`、`atrenew-*`、`feishu_kb_*` 等其它项目，一律不得触碰。
+- 编排：新机唯一编排是 `compose.target.yaml`（网关绑 `0.0.0.0:18090`）。**不得用 `compose.yaml` 或 `deploy/*.compose.yaml` 重建容器**——其端口是 `127.0.0.1`、镜像标签与实际运行不一致。
 - 数据库一律以只读方式打开：`sqlite3.connect("file:/opt/gallery-mvp/v03data/gallery.db?mode=ro&immutable=1", uri=True)`；不要复制库出来做写操作。
 - 生产数据库默认只读：禁止未获用户明确确认的 UPDATE / INSERT / DELETE / DDL。确需数据库写入时先说明 SQL、预计影响行数、回滚和验证方式，取得明确确认后再做。
-- 用户明确要求线上图库应用修复/更新时，可修改 `/opt/gallery-mvp/app/` 中本次涉及的应用文件，并通过 Docker Compose 构建、替换 `gallery` 服务容器；操作前备份被改源码并记录当前镜像 ID，准备回滚。不得修改 `v03data/`、`runtime/`，不得读取 `.env`、密钥或备份库。
-- 图库应用发布范围仅限 `gallery`、`white-gallery-api`、`coverage-api`、`governance-api`、`douyin-api`、`integration-api` 六个业务边界清晰的 Compose 服务，以及对应前端模块。发布/回滚只更新目标服务，不停止或替换其它模块，复用已有私有网络，不创建新网络。禁止操作同机其它项目，禁止全套 stop/rm/up。生产写库、图片删除/隐藏及质量规则变更仍须单独确认。
-- 应用部署不代表验收完成。任何前端可见更新都必须按“上线验收”要求在真实生产域名和真实登录态下检查并留证。
+- 发布后端：用 `deploy/release-target.sh`（自动设置 `GALLERY_COMPOSE_FILES=compose.target.yaml`）。新机**不在本机构建镜像**，只做镜像直切：别处构建 → `docker load` → `release-target.sh backend-publish <module> --expected-image sha256:<当前> --image sha256:<新> --release <版本号>`；回滚用 `backend-rollback`。前端模块仍用 `deploy/publish-frontend-module.sh`（只改文件与软链）。
+- 图库应用发布范围仅限上述 6 个已存在服务与对应前端模块。发布/回滚只更新目标服务，不停止或替换其它模块，不创建新网络。禁止操作同机其它项目，禁止全套 stop/rm/up。生产写库、图片删除/隐藏及质量规则变更仍须单独确认。
+- 应用部署不代表验收完成。任何前端可见更新都必须按“上线验收”要求在 **`http://47.95.20.94:18090/`** 与真实登录态下检查并留证；旧域名 `picsystem.changziqi.com` 仍指向旧机，不得用于验收。
+- 用户已于 2026-11-24 明确：新机仅供团队内部使用，不启用域名与 HTTPS 属既定选择，`SESSION_COOKIE_SECURE=0` 保持不动。
 
 当前数据口径（2026-11-17 实测，勿沿用历史结论）：`image_assets` 共 49 列、3,642 行；`category` 取值 phone 2,092（`publish_state` 全空，不走发布流程）/ tablet 1,099（已发布 436）/ watch 435（415）/ laptop 16（8）；非手机已发布 859 张，其中有颜色 670 张；非手机的 `model_name`、`model_id` 全为空，型号只存在于 `model_dir`；颜色分 `gaia_color`（须命中该型号真实 SKU 色集）与 `official_color`（须有可核验出处）。
-
-## 2026-11-22 全业务模块拆分补充
-
-- 用户已明确批准图库各业务模块独立运行和发布，包括新增治理、抖音、业务对接三个图库服务。此为原三服务范围的明确增补，不授权其它项目操作或生产数据迁移。
-- gallery 只提供登录、共享导航、资源路由、固定业务命名空间代理及 Schema 聚合；不注册治理/抖音业务实现，不在启动时建业务表。
-- 治理服务复用已有上传、审核、A/B/C 转池事务，保留原数据和准入规则；抖音、对接和两个原读服务保持生产数据只读挂载。不得用服务拆分申请为由执行实际生产写库测试。
-- docs 模块同时包含指南与在线调试 UI，/api-docs 只跳转到当前 docs 版本。服务端 Schema 从独立服务聚合，不随文案硬编码。
-- 参考需求文档不替代已确认的 Cookie 鉴权、商业授权和现行图片准入。新增 Bearer、IP 白名单或变更质量门槛应另行对齐。
