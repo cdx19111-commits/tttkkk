@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>白底图获取工具</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/ui.js" defer></script>
+</head>
+<body>
+<header class="masthead">
+  <div class="masthead-inner">
+    <span class="mark" aria-hidden="true">□</span>
+    <div><h1>白底图获取工具</h1><p>中关村在线 · 手机图库</p></div>
+  </div>
+</header>
+<main>
+  <section class="panel import" aria-labelledby="import-heading">
+    <div class="section-heading">
+      <div><h2 id="import-heading">导入型号</h2><p>上传含「品牌」「型号」列的 Excel，或粘贴型号和 ZOL 链接。</p></div>
+      <div class="tabs" aria-label="导入方式">
+        <button id="excel-tab" class="tab current" type="button" aria-pressed="true">Excel</button>
+        <button id="paste-tab" class="tab" type="button" aria-pressed="false">粘贴清单</button>
+      </div>
+    </div>
+    <form id="import-form">
+      <label id="drop" class="file-zone">
+        <input id="excel" name="excel" type="file" accept=".xlsx">
+        <span class="file-icon" aria-hidden="true">↑</span>
+        <span><strong id="file-name">选择 Excel 文件</strong><small>支持 .xlsx，可拖放到这里</small></span>
+      </label>
+      <textarea id="paste" hidden rows="4" placeholder="一行一个型号或链接&#10;苹果 iPhone 11&#10;OPPO A1 (5G版)" aria-label="型号清单"></textarea>
+      <div class="import-actions">
+        <label for="sample">处理范围</label>
+        <select id="sample"><option value="0">全部型号</option><option value="12">抽样 12 个型号</option></select>
+        <button id="import-button" class="primary" type="submit">导入清单</button>
+      </div>
+    </form>
+  </section>
+  <p id="message" role="status" hidden></p>
+  <section class="panel results" aria-labelledby="results-heading">
+    <div class="section-heading">
+      <div><h2 id="results-heading">批次结果</h2><p>优先正背同框，导出 800 × 800 JPG，包含待复核候选。</p></div>
+      <select id="batches" aria-label="选择批次"></select>
+    </div>
+    <div id="empty" class="empty">导入清单后开始采集</div>
+    <div id="workspace" hidden>
+      <div id="summary" class="summary"></div>
+      <progress id="progress" value="0" max="1" aria-label="批次处理进度"></progress>
+      <div class="toolbar">
+        <div class="filter"><input id="query" type="search" placeholder="搜索品牌或型号" aria-label="搜索型号">
+          <select id="status" aria-label="按状态筛选"><option value="">全部状态</option></select></div>
+        <div class="controls">
+          <button id="retry" type="button" hidden>重试失败项</button>
+          <button id="pause" type="button" hidden>暂停</button>
+          <button id="start" type="button" class="primary">开始采集</button>
+          <a id="export" class="button" href="#">下载 ZIP</a>
+        </div>
+      </div>
+      <p id="pause-reason" class="notice" hidden></p>
+      <div id="rows"></div>
+      <footer id="pagination">
+        <button id="previous" type="button">上一页</button>
+        <span id="page-number"></span>
+        <button id="next" type="button">下一页</button>
+      </footer>
+    </div>
+  </section>
+</main>
+</body>
+</html>
