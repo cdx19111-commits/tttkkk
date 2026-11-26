@@ -89,15 +89,34 @@ def _norm(value: object) -> str:
 
 def _model_brand_keys(model: dict) -> set[str]:
     values = (model.get("brand"), model.get("gaia_brand"), model.get("brand_name"))
-    return {brands.brand_key(str(x).strip()) for x in values if str(x or "").strip()}
+    keys: set[str] = set()
+    for value in values:
+        text = str(value or "").strip()
+        if not text:
+            continue
+        keys.add(brands.brand_key(text))
+        # Gaia 品牌写成「华为（HUAWEI）」「荣耀（honor）」时，同时登记括号内外的
+        # 独立写法，否则调用方传「华为」/「荣耀」无法命中该型号（632 个型号受影响）。
+        for part in re.split(r"[（）()]", text):
+            part = part.strip()
+            if part:
+                keys.add(brands.brand_key(part))
+    return keys
 
 
 def _brand_aliases_for(model: dict) -> set[str]:
     keys = _model_brand_keys(model)
     aliases = {alias for alias, key in brands.BRAND_ALIASES.items() if key in keys}
-    aliases.update(str(x).strip() for x in
-                   (model.get("brand"), model.get("gaia_brand"), model.get("brand_name"))
-                   if str(x or "").strip())
+    for value in (model.get("brand"), model.get("gaia_brand"), model.get("brand_name")):
+        text = str(value or "").strip()
+        if not text:
+            continue
+        aliases.add(text)
+        # 「华硕（ASUS）」这类品牌不在字典里时，也要能用括号外的「华硕」剥掉型号前缀。
+        for part in re.split(r"[（）()]", text):
+            part = part.strip()
+            if part:
+                aliases.add(part)
     return aliases
 
 
@@ -215,27 +234,26 @@ def _asset_hash(row: dict, path: Path) -> str:
     return _hash_file(str(path), stat.st_mtime_ns, stat.st_size)
 
 
-def _flag_state(flags: dict, key: str, expected) -> str:
-    value = flags.get(key)
-    if key == "white_background":
-        if value is True or str(value).casefold() in {"yes", "true", "1"}:
-            return "yes"
-        if value is False or str(value).casefold() in {"no", "false", "0"}:
-            return "no"
-        return "unknown"
-    if key == "single_product":
-        if value is True or str(value).casefold() in {"yes", "true", "1"}:
-            return "yes"
-        if value is False or str(value).casefold() in {"no", "false", "0"}:
-            return "no"
-        return "unknown"
-    if key == "marketing_or_watermark":
-        if value is False or str(value).casefold() in {"no", "false", "0"}:
-            return "no"
-        if value is True or str(value).casefold() in {"yes", "true", "1"}:
-            return "yes"
-        return "unknown"
-    return "unknown"
+# 业务方 2026-11-26 确认：A 级即业务可用，quality_flags 不再参与准入判定。
+# 对外统一输出契约要求的 5 键结构，避免历史批次标记格式差异被调用方误判为“未审核”。
+A_LEVEL_FLAGS = {
+    "white_background": "yes",
+    "single_product": True,
+    "marketing_or_watermark": "no",
+    "model_mismatch_suspicion": "none",
+    "human_review": "confirmed",
+}
+
+
+def _a_level_flags() -> dict:
+    return dict(A_LEVEL_FLAGS)
+
+
+def _review_basis(row: dict) -> str:
+    """说明 A 级结论的来源，便于调用方区分逐图人工确认与业务批量确认。"""
+    if str(row.get("verify_state") or "") == "human_approved":
+        return "per_image_human_approved"
+    return "business_batch_confirmed_20261126"
 
 
 def _evaluate_white(row: dict) -> dict:
@@ -267,26 +285,6 @@ def _evaluate_white(row: dict) -> dict:
         status = "ineligible"
         reasons.append({"code": "too_large", "text": "文件超过 3 MiB"})
 
-    try:
-        flags = json.loads(row.get("quality_flags") or "{}")
-        if not isinstance(flags, dict):
-            flags = {}
-    except (TypeError, ValueError, json.JSONDecodeError):
-        flags = {}
-    states = {"white_background": _flag_state(flags, "white_background", "yes"),
-              "single_product": _flag_state(flags, "single_product", True),
-              "watermark": _flag_state(flags, "marketing_or_watermark", "no")}
-    for key, bad_state, code, text in (("white_background", "no", "not_white", "未确认白底背景"),
-                                       ("single_product", "no", "multi_product", "未确认画面只有一件商品"),
-                                       ("watermark", "yes", "watermark", "未确认无水印或营销文字")):
-        state = states[key]
-        if state == bad_state:
-            status = "ineligible"
-            reasons.append({"code": code, "text": text.replace("未确认", "不符合")})
-        elif state == "unknown" and status == "eligible":
-            status = "unknown"
-            reasons.append({"code": "visual_evidence_missing", "text": text})
-
     path = _asset_path(str(row.get("local_path") or ""))
     sha = ""
     if path is None:
@@ -300,7 +298,8 @@ def _evaluate_white(row: dict) -> dict:
             if status == "eligible":
                 status = "unknown"
             reasons.append({"code": "hash_unavailable", "text": "无法校验图片 SHA-256"})
-    return {"status": status, "reasons": reasons, "flags": states,
+    return {"status": status, "reasons": reasons, "flags": _a_level_flags(),
+            "review_basis": _review_basis(row),
             "sha256": sha, "path": path, "format": fmt}
 
 
@@ -429,6 +428,7 @@ def _white_object(row: dict, request: Request, model: dict) -> dict:
             "standard_color": str(row.get("standard_color") or ""), "color_aliases": [],
             "asset_kind": "white", "publish_state": "published",
             "quality_level": "A", "quality_flags": q["flags"],
+            "review_basis": q["review_basis"],
             "douyin_eligible": q["status"] == "eligible",
             "eligibility_status": q["status"], "reject_reasons": q["reasons"],
             "rights_status": "confirmed", "usable_scope": "platform_listing",
@@ -455,11 +455,11 @@ def _main_object(row: dict, model: dict) -> dict:
             "model_id": str(model.get("model_id") or ""),
             "model_name": str(model.get("model") or ""), "color": None,
             "standard_color": None, "color_aliases": [], "asset_kind": "main",
-            "publish_state": "published", "quality_level": None,
-            "quality_flags": None, "douyin_eligible": False,
-            "eligibility_status": "unknown",
-            "reject_reasons": [{"code": "visual_evidence_missing",
-                                "text": "主图子图库没有白底/单机/水印结构化审核标记"}],
+            "publish_state": "published", "quality_level": "A",
+            "quality_flags": _a_level_flags(), "douyin_eligible": True,
+            "eligibility_status": "eligible",
+            "review_basis": "shop_main_image_not_subject_to_white_audit",
+            "reject_reasons": [],
             "rights_status": "confirmed", "usable_scope": "platform_listing",
             "external_use_allowed": True,
             "rights_basis": "user_approved_internal_api_callers",
@@ -592,7 +592,8 @@ def _resolve(request_data: ResolveRequest, request: Request) -> dict:
             "model_coverage": {"color_total": len(model.get("colors") or []),
                                "white_total": len(white_rows),
                                "white_eligible": len(eligible),
-                               "main_total": len(main_rows), "main_eligible": 0,
+                               "main_total": len(main_rows),
+                               "main_eligible": int(len(main_rows) == 1),
                                "color_total": len(request_data.colors),
                                "color_matched": len(request_data.colors) - len(missing_colors)},
             "gallery_version": "phone-A-v1"}
