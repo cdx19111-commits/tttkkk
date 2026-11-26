@@ -358,6 +358,31 @@ def ensure_manual_gallery_entry(target: Target, output: Path, digest: str, size:
         return f"{type(exc).__name__}: {exc}"
 
 
+def sync_gallery_row(target: Target, digest: str, size: int) -> str:
+    """Sync gallery metadata after an in-place main-image replacement."""
+    if not _gallery_writable():
+        return "gallery_read_only"
+    try:
+        conn = sqlite3.connect(REAL_DB, timeout=30)
+        conn.row_factory = sqlite3.Row
+        try:
+            columns = {row[1] for row in conn.execute("pragma table_info(douyin_gallery_items)")}
+            active_sql = ", is_active=1" if "is_active" in columns else ""
+            sql = ("update douyin_gallery_items set sha256=?, size_bytes=?, width=1080, "
+                   "height=1080, extension='png'" + active_sql + " where item_id=?")
+            cur = conn.execute(sql, (digest, size, target.existing.item_id))
+            if cur.rowcount == 0:
+                sql = ("update douyin_gallery_items set sha256=?, size_bytes=?, width=1080, "
+                       "height=1080, extension='png'" + active_sql + " where local_path=?")
+                cur = conn.execute(sql, (digest, size, target.existing.local_path))
+            conn.commit()
+            return "" if cur.rowcount else "gallery_row_missing"
+        finally:
+            conn.close()
+    except Exception as exc:
+        return f"{type(exc).__name__}: {exc}"
+
+
 def manual_targets(shop_id: str) -> list[Target]:
     all_sources = load_all_sources(REAL_DB)
     with db() as conn:
@@ -466,7 +491,10 @@ def generate_one(conn: sqlite3.Connection, target: Target, force: bool, run_id: 
         shutil.move(str(output), str(backup))
     temp.replace(output)
     output_sha = sha256(output)
-    gallery_error = ensure_manual_gallery_entry(target, output, output_sha, output.stat().st_size)
+    output_size = output.stat().st_size
+    gallery_error = ensure_manual_gallery_entry(target, output, output_sha, output_size)
+    if not gallery_error:
+        gallery_error = sync_gallery_row(target, output_sha, output_size)
     values = dict(
         shop_id=target.shop_id, model_key=target.key, model_name=target.model_name,
         asset_id=source.asset_id, source_path=str(REAL_V03 / source.local_path),

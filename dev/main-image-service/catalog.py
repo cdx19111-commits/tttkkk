@@ -215,9 +215,11 @@ def load_shop_targets(shop_id: str, db_path: Path) -> list[Target]:
     conn.row_factory = sqlite3.Row
     try:
         shop_items: dict[tuple[str, str], list[tuple[ExistingMain, str, str]]] = defaultdict(list)
+        columns = {row[1] for row in conn.execute("pragma table_info(douyin_gallery_items)")}
+        active_filter = "coalesce(is_active,1)=1" if "is_active" in columns else "1=1"
         for row in conn.execute(
             "select item_id, source_path, name, extension, local_path, width, height "
-            "from douyin_gallery_items where source_path like ?",
+            f"from douyin_gallery_items where source_path like ? and {active_filter}",
             (f"抖音主图/{shop_id}/%",),
         ):
             parsed = _parse_item(row["source_path"])
