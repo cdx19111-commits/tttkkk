@@ -1,0 +1,207 @@
+<section class="module-surface" id="view-douyin">
+      <div class="dy-tabs" role="tablist" aria-label="抖音主图视图">
+        <button type="button" class="dy-tab active" data-dy-tab="library" role="tab" aria-selected="true">主图库</button>
+        <button type="button" class="dy-tab" data-dy-tab="generate" role="tab" aria-selected="false">主图生成</button>
+      </div>
+      <div id="douyinLibraryPane">
+      <div class="stats">
+        <div class="stat"><span class="stat-label">主图数量</span><b id="douyinTotal">—</b><span class="stat-hint">飞书云盘图片</span></div>
+        <div class="stat"><span class="stat-label">目录数量</span><b id="douyinFoldersTotal">—</b><span class="stat-hint">完整目录树</span></div>
+        <div class="stat"><span class="stat-label">存储大小</span><b id="douyinSize">—</b><span class="stat-hint">原图文件</span></div>
+      </div>
+      <div class="panel douyin-panel">
+        <div class="decision-heading"><div><h2>抖音主图</h2>
+          <p class="muted">目录筛选与飞书云盘「抖音主图」保持一致。</p></div>
+          <button id="douyinReload" class="btn ghost" type="button">刷新</button></div>
+        <div id="douyinFolderFilters" class="douyin-folder-filters" aria-label="飞书目录筛选"></div>
+        <div class="douyin-toolbar">
+          <div id="douyinBreadcrumb" class="douyin-breadcrumb">抖音主图</div>
+          <input id="douyinSearch" type="search" placeholder="搜索当前目录图片名称" autocomplete="off">
+          <span id="douyinCount" class="result-count"></span>
+        </div>
+      </div>
+      <div class="grid" id="douyinGrid"></div>
+      <div class="more-wrap"><button id="douyinMore" class="btn" hidden>加载更多</button></div>
+      <div class="empty" id="douyinEmpty" hidden>当前目录没有图片</div>
+      </div>
+      <div id="douyinGeneratePane" hidden>
+        <div class="dy-gen-head">
+          <div><h2>主图生成</h2><p class="muted">按店铺和型号生成，每个型号只保留一张；旧图先备份再覆盖。</p><p class="muted" id="dyGenSchedule"></p></div>
+          <div class="dy-gen-actions">
+            <button id="dyGenRefresh" class="btn ghost" type="button">刷新</button>
+            <button id="dyGenRegenSelected" class="btn primary" type="button" disabled>重新生成选中（0）</button>
+            <button id="dyGenSelectAll" class="btn ghost" type="button" title="全选当前筛选下的全部型号">全选</button>
+            <button id="dyGenClearSelection" class="btn ghost" type="button" disabled title="清空已选型号">清空</button>
+            <button id="dyGenAll" class="btn ghost" type="button" title="生成当前筛选下全部缺失/待更新型号">生成缺失</button>
+            <button id="dyGenMap" class="btn ghost" type="button">手动映射</button>
+            <button id="dyGenTemplates" class="btn ghost" type="button">模板选择</button>
+          </div>
+        </div>
+        <div class="dy-manual-panel" id="dyManualPanel" hidden>
+          <div class="dy-template-head">
+            <h3>手动映射型号</h3>
+            <button id="dyManualClose" class="btn ghost" type="button">关闭</button>
+          </div>
+          <p class="muted">自动匹配不到时，从 A 级白底中搜索型号并添加到当前店铺；系统会按店铺目录结构新建目录。</p>
+          <div class="dy-manual-search">
+            <input id="dyManualSearch" type="search" placeholder="搜索型号、品牌或型号键" autocomplete="off">
+            <button id="dyManualRefresh" class="btn ghost" type="button">刷新候选</button>
+          </div>
+          <div class="dy-manual-section">
+            <div class="dy-manual-section-head">
+              <h4>可添加的型号</h4>
+              <span id="dyManualOptionsCount" class="muted"></span>
+            </div>
+            <div id="dyManualOptions" class="dy-manual-options"></div>
+          </div>
+          <div class="dy-manual-section">
+            <div class="dy-manual-section-head">
+              <h4>当前店铺已手动映射</h4>
+              <span id="dyManualMappedCount" class="muted"></span>
+            </div>
+            <div id="dyManualList" class="dy-manual-list"></div>
+          </div>
+          <p id="dyManualStatus" class="muted"></p>
+        </div>
+        <div class="dy-template-panel" id="dyTemplatePanel" hidden>
+          <div class="dy-template-head">
+            <h3>模板选择</h3>
+            <button id="dyTemplateClose" class="btn ghost" type="button">关闭</button>
+          </div>
+          <div class="dy-template-toolbar">
+            <label>范围
+              <select id="dyTemplateScope">
+                <option value="shop">当前店铺</option>
+                <option value="global">通用模板</option>
+              </select>
+            </label>
+            <label>品类
+              <select id="dyTemplateCategory">
+                <option value="ios_phone">苹果手机</option>
+                <option value="android_phone">安卓手机</option>
+                <option value="ipad">iPad</option>
+                <option value="android_tablet">安卓平板</option>
+                <option value="watch">手表</option>
+                <option value="other_digital">其他数码</option>
+              </select>
+            </label>
+            <button id="dyTemplateLoad" class="btn ghost" type="button">刷新列表</button>
+          </div>
+          <div class="dy-template-workspace">
+            <div id="dyTemplateList" class="dy-template-list"></div>
+            <div class="dy-template-side">
+              <h4>上传模板</h4>
+              <label class="dy-file-picker" for="dyTemplateFile">
+                <input id="dyTemplateFile" type="file" accept="image/png">
+                <span class="dy-file-button">选择 PNG</span>
+                <span id="dyTemplateFileName" class="dy-file-name">未选择文件</span>
+              </label>
+              <div class="dy-template-actions">
+                <button id="dyTemplateUpload" class="btn primary" type="button">上传并设为当前</button>
+                <a id="dyTemplateDownload" class="btn ghost" href="#" download>下载模板示例</a>
+              </div>
+              <p class="muted dy-template-hint">1080×1080 PNG，≤5MB；模板只放背景设计，系统会叠加商品和型号文字。横版、竖版商品都会等比缩放，不会裁切。</p>
+              <p id="dyTemplateSpec" class="muted dy-template-hint"></p>
+              <h4>预览生成效果</h4>
+              <div class="dy-template-preview-controls">
+                <select id="dyPreviewModel"></select>
+                <button id="dyTemplatePreview" class="btn" type="button">预览</button>
+              </div>
+              <p id="dyTemplateStatus" class="muted"></p>
+            </div>
+          </div>
+        </div>
+        <div class="dy-template-modal" id="dyTemplateModal" hidden role="dialog" aria-modal="true" aria-label="模板生成预览">
+          <div class="dy-template-modal-panel" id="dyTemplateModalPanel">
+            <button class="dy-template-modal-close" id="dyTemplateModalClose" type="button" aria-label="关闭预览">×</button>
+            <img id="dyTemplatePreviewImg" alt="模板生成预览">
+            <p id="dyTemplatePreviewInfo" class="muted"></p>
+          </div>
+        </div>
+
+        <div class="dy-gen-stats" id="dyGenStats">
+          <div class="dy-gen-stat"><b id="dyGenItems">—</b><span>型号</span></div>
+          <div class="dy-gen-stat"><b id="dyGenGenerated">—</b><span>已生成</span></div>
+          <div class="dy-gen-stat"><b id="dyGenMissing">—</b><span>缺失</span></div>
+          <div class="dy-gen-stat"><b id="dyGenStale">—</b><span>待更新</span></div>
+          <div class="dy-gen-stat"><b id="dyGenFailed">—</b><span>失败</span></div>
+        </div>
+        <div class="dy-gen-progress" id="dyGenProgress" hidden>
+          <div class="dy-gen-progress-track"><span id="dyGenProgressBar"></span></div>
+          <span id="dyGenProgressText" class="muted"></span>
+        </div>
+        <div class="panel dy-gen-panel">
+          <div class="dy-gen-toolbar">
+            <label class="dy-filter-field dy-filter-shop"><span>店铺</span>
+              <div class="dy-filter" id="dyGenShopFilter">
+                <button class="dy-filter-button" type="button" aria-haspopup="listbox" aria-expanded="false"><span class="dy-filter-value">选择店铺</span><i>⌄</i></button>
+                <div class="dy-filter-menu" role="listbox" hidden></div>
+              </div>
+            </label>
+            <label class="dy-filter-field dy-filter-category"><span>品类</span>
+              <div class="dy-filter" id="dyGenCategoryFilter">
+                <button class="dy-filter-button" type="button" aria-haspopup="listbox" aria-expanded="false"><span class="dy-filter-value">全部品类</span><i>⌄</i></button>
+                <div class="dy-filter-menu" role="listbox" hidden></div>
+              </div>
+            </label>
+            <label class="dy-filter-field dy-filter-brand"><span>品牌</span>
+              <div class="dy-filter" id="dyGenBrandFilter">
+                <button class="dy-filter-button" type="button" aria-haspopup="listbox" aria-expanded="false"><span class="dy-filter-value">全部品牌</span><i>⌄</i></button>
+                <div class="dy-filter-menu" role="listbox" hidden></div>
+              </div>
+            </label>
+            <label class="dy-filter-field dy-filter-model"><span>型号</span>
+              <div class="dy-filter" id="dyGenModelFilter">
+                <button class="dy-filter-button" type="button" aria-haspopup="listbox" aria-expanded="false"><span class="dy-filter-value">全部型号</span><i>⌄</i></button>
+                <div class="dy-filter-menu" role="listbox" hidden></div>
+              </div>
+            </label>
+            <label class="dy-filter-field dy-filter-search"><span>搜索</span><input id="dyGenSearch" type="search" placeholder="型号或颜色" autocomplete="off"></label>
+            <label class="dy-filter-field dy-filter-status"><span>状态</span>
+              <div class="dy-filter" id="dyGenStatusFilter">
+                <button class="dy-filter-button" type="button" aria-haspopup="listbox" aria-expanded="false"><span class="dy-filter-value">全部状态</span><i>⌄</i></button>
+                <div class="dy-filter-menu" role="listbox" hidden></div>
+              </div>
+            </label>
+          </div>
+          <div class="dy-gen-list-tools">
+            <div class="dy-gen-selection" id="dyGenSelectionInfo">点图片预览，点右下角勾选框多选；已选 0 个</div>
+            <div class="dy-view-toggle" role="group" aria-label="视图切换">
+              <button id="dyGenViewGrid" class="dy-view-button active" type="button">网格</button>
+              <button id="dyGenViewList" class="dy-view-button" type="button">列表</button>
+            </div>
+          </div>
+          <div id="dyGenList" class="dy-gen-grid"></div>
+          <div class="dy-gen-more-wrap"><button id="dyGenMore" class="btn ghost dy-gen-more" type="button" hidden>加载更多</button><span id="dyGenLoaded" class="muted"></span></div>
+          <div id="dyGenEmpty" class="empty" hidden>没有符合条件的型号</div>
+        </div>
+      </div>
+    </section>
+<div class="dy-main-preview" id="dyMainPreview" hidden role="dialog" aria-modal="true" aria-label="主图预览">
+  <div class="dy-main-preview-panel">
+    <button class="dy-main-preview-close" id="dyMainPreviewClose" type="button" aria-label="关闭预览">×</button>
+    <div class="dy-main-preview-head">
+      <strong id="dyMainPreviewTitle"></strong>
+      <span id="dyMainPreviewMeta"></span>
+    </div>
+    <div class="dy-main-preview-body"><img id="dyMainPreviewImage" alt=""></div>
+    <div class="dy-main-preview-actions">
+      <button id="dyMainPreviewRegen" class="btn primary" type="button">重新生成</button>
+      <a id="dyMainPreviewDownload" class="btn ghost" href="#" download>下载原图</a>
+      <span id="dyMainPreviewStatus" class="muted"></span>
+    </div>
+  </div>
+</div>
+
+<div class="douyin-preview" id="douyinPreview" hidden role="dialog" aria-modal="true" aria-labelledby="douyinPreviewTitle">
+  <div class="douyin-preview-panel">
+    <button class="douyin-preview-close" id="douyinPreviewClose" type="button" aria-label="关闭预览">×</button>
+    <div class="douyin-preview-heading">
+      <strong id="douyinPreviewTitle"></strong>
+      <span id="douyinPreviewMeta"></span>
+      <small id="douyinPreviewPath"></small>
+    </div>
+    <div class="douyin-preview-image-wrap"><img id="douyinPreviewImage" alt=""></div>
+    <div class="douyin-preview-actions"><a class="btn ghost" id="douyinPreviewDownload" href="#" download>下载原图</a><span>按 Esc 或点击空白处关闭，返回列表继续浏览</span></div>
+  </div>
+</div>

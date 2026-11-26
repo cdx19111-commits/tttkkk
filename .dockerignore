@@ -15,3 +15,12 @@ __pycache__
 ._*
 # 型号参数文件改为只读挂载，不进镜像
 app/static/model_params.json
+# 主图服务本地数据与样张不进构建上下文
+dev/local
+dev/main-image-tool
+dev/main-image-service/service_data
+dev/main-image-service/samples
+dev/main-image-service/archive_local
+dev/main-image-service/archive_plans
+dev/main-image-service/archive_rehearsal
+dev/main-image-service/sample

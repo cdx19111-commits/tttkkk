@@ -1,0 +1,156 @@
+{
+  "global": {
+    "font_path": "/System/Library/Fonts/Hiragino Sans GB.ttc",
+    "prefer_ai_remove_bg": false,
+    "bg_removal_tolerance": 30,
+    "output_format": "png",
+    "output_quality": 95,
+    "bg_mode": "green"
+  },
+  "templates": {
+    "android_phone": {
+      "name": "安卓手机",
+      "template_path": "/Users/a162023/Documents/tttkkk-zrt-20261125-01/dev/main-image-tool/templates/android_phone.png",
+      "product_image": {
+        "center_x": 760,
+        "center_y": 520,
+        "max_width": 520,
+        "max_height": 650,
+        "fit_mode": "contain",
+        "add_shadow": false,
+        "auto_crop_square": false,
+        "square_size": 0
+      },
+      "product_name": {
+        "center_x": 750,
+        "center_y": 140,
+        "font_size": 52,
+        "color": "#1a1a1a",
+        "max_width": 520,
+        "align": "center",
+        "auto_shrink": true,
+        "bold": true
+      }
+    },
+    "ios_phone": {
+      "name": "苹果手机",
+      "template_path": "/Users/a162023/Documents/tttkkk-zrt-20261125-01/dev/main-image-tool/templates/ios_phone.png",
+      "product_image": {
+        "center_x": 780,
+        "center_y": 540,
+        "max_width": 520,
+        "max_height": 650,
+        "fit_mode": "contain",
+        "add_shadow": false,
+        "auto_crop_square": false,
+        "square_size": 0
+      },
+      "product_name": {
+        "center_x": 780,
+        "center_y": 170,
+        "font_size": 52,
+        "color": "#1a1a1a",
+        "max_width": 520,
+        "align": "center",
+        "auto_shrink": true,
+        "bold": true
+      }
+    },
+    "ipad": {
+      "name": "iPad",
+      "template_path": "/Users/a162023/Documents/tttkkk-zrt-20261125-01/dev/main-image-tool/templates/ipad.png",
+      "product_image": {
+        "center_x": 790,
+        "center_y": 560,
+        "max_width": 638,
+        "max_height": 550,
+        "fit_mode": "contain",
+        "add_shadow": false,
+        "auto_crop_square": false,
+        "square_size": 0
+      },
+      "product_name": {
+        "center_x": 780,
+        "center_y": 180,
+        "font_size": 50,
+        "color": "#1a1a1a",
+        "max_width": 540,
+        "align": "center",
+        "auto_shrink": true,
+        "bold": true
+      }
+    },
+    "android_tablet": {
+      "name": "安卓平板",
+      "template_path": "/Users/a162023/Documents/tttkkk-zrt-20261125-01/dev/main-image-tool/templates/android_tablet.png",
+      "product_image": {
+        "center_x": 760,
+        "center_y": 560,
+        "max_width": 638,
+        "max_height": 550,
+        "fit_mode": "contain",
+        "add_shadow": false,
+        "auto_crop_square": false,
+        "square_size": 0
+      },
+      "product_name": {
+        "center_x": 750,
+        "center_y": 180,
+        "font_size": 50,
+        "color": "#1a1a1a",
+        "max_width": 540,
+        "align": "center",
+        "auto_shrink": true,
+        "bold": true
+      }
+    },
+    "watch": {
+      "name": "手表",
+      "template_path": "/Users/a162023/Documents/tttkkk-zrt-20261125-01/dev/main-image-tool/templates/watch.png",
+      "product_image": {
+        "center_x": 790,
+        "center_y": 580,
+        "max_width": 462,
+        "max_height": 462,
+        "fit_mode": "contain",
+        "add_shadow": false,
+        "auto_crop_square": false,
+        "square_size": 0
+      },
+      "product_name": {
+        "center_x": 780,
+        "center_y": 200,
+        "font_size": 48,
+        "color": "#1a1a1a",
+        "max_width": 480,
+        "align": "center",
+        "auto_shrink": true,
+        "bold": true
+      }
+    },
+    "other_digital": {
+      "name": "其他数码",
+      "template_path": "/Users/a162023/Documents/tttkkk-zrt-20261125-01/dev/main-image-tool/templates/other_digital.png",
+      "product_image": {
+        "center_x": 790,
+        "center_y": 550,
+        "max_width": 572,
+        "max_height": 660,
+        "fit_mode": "contain",
+        "add_shadow": false,
+        "auto_crop_square": false,
+        "square_size": 0
+      },
+      "product_name": {
+        "center_x": 580,
+        "center_y": 170,
+        "font_size": 50,
+        "color": "#1a1a1a",
+        "max_width": 520,
+        "align": "center",
+        "auto_shrink": true,
+        "bold": true
+      }
+    }
+  }
+}

@@ -24,9 +24,10 @@ SERVICES = {
     'governance-api': ('Dockerfile.governance-api', None, 'gallery-governance-api'),
     'douyin-api': ('Dockerfile.douyin-api', None, 'gallery-douyin-api'),
     'integration-api': ('Dockerfile.integration-api', None, 'gallery-integration-api'),
+    'main-image-api': ('Dockerfile.main-image-api', None, 'gallery-main-image-api'),
 
 }
-OPTIONAL_SERVICES = {'governance-api', 'douyin-api', 'integration-api'}
+OPTIONAL_SERVICES = {'governance-api', 'douyin-api', 'integration-api', 'main-image-api'}
 IMAGE = re.compile(r'^sha256:[a-f0-9]{64}$')
 NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$')
 

@@ -33,6 +33,14 @@ def _conn() -> sqlite3.Connection:
     return c
 
 
+def _active_expr(c: sqlite3.Connection, alias: str = "") -> str:
+    """Backward-compatible active-row filter (older DBs have no is_active)."""
+    cols = {row[1] for row in c.execute("pragma table_info(douyin_gallery_items)")}
+    if "is_active" not in cols:
+        return "1=1"
+    return f"coalesce({alias + '.' if alias else ''}is_active,1)=1"
+
+
 def _require_login(request: Request) -> None:
     if getattr(request.state, "role", "") not in ("business", "review"):
         raise HTTPException(401, "需要图库授权登录")
@@ -54,7 +62,9 @@ def init_schema() -> None:
           name TEXT NOT NULL, extension TEXT NOT NULL,
           local_path TEXT NOT NULL UNIQUE, sha256 TEXT NOT NULL,
           size_bytes INTEGER NOT NULL, width INTEGER, height INTEGER,
-          source_url TEXT NOT NULL DEFAULT '', imported_at TEXT NOT NULL
+          source_url TEXT NOT NULL DEFAULT '', imported_at TEXT NOT NULL,
+          is_active INTEGER NOT NULL DEFAULT 1,
+          replaced_by TEXT, archive_batch TEXT, archived_at TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_douyin_items_folder
           ON douyin_gallery_items(folder_id, name);
@@ -122,8 +132,9 @@ def import_manifest(manifest_path: str) -> dict:
 def summary(request: Request):
     _require_login(request)
     with closing(_conn()) as c:
+        active = _active_expr(c)
         image_count, total_bytes = c.execute(
-            "SELECT count(*),coalesce(sum(size_bytes),0) FROM douyin_gallery_items").fetchone()
+            f"SELECT count(*),coalesce(sum(size_bytes),0) FROM douyin_gallery_items WHERE {active}").fetchone()
         folder_count = c.execute("SELECT count(*) FROM douyin_gallery_folders").fetchone()[0]
     return {"images": image_count, "folders": folder_count, "size_bytes": total_bytes,
             "root_folder_id": ROOT_ID}
@@ -137,9 +148,10 @@ def folders(request: Request, parent_id: str = ROOT_ID):
                             (parent_id,)).fetchone()
         if not parent:
             raise HTTPException(404, "目录不存在")
-        rows = c.execute("""SELECT f.folder_id,f.name,f.path,
-          (SELECT count(*) FROM douyin_gallery_items i WHERE
-             i.folder_id=f.folder_id OR substr(i.source_path,1,length('抖音主图/'||f.path||'/'))='抖音主图/'||f.path||'/') image_count,
+        active = _active_expr(c, "i")
+        rows = c.execute(f"""SELECT f.folder_id,f.name,f.path,
+          (SELECT count(*) FROM douyin_gallery_items i WHERE {active} AND
+             (i.folder_id=f.folder_id OR substr(i.source_path,1,length('抖音主图/'||f.path||'/'))='抖音主图/'||f.path||'/')) image_count,
           (SELECT count(*) FROM douyin_gallery_folders d WHERE d.parent_id=f.folder_id) child_count
           FROM douyin_gallery_folders f WHERE f.parent_id=? ORDER BY f.name COLLATE NOCASE""",
           (parent_id,)).fetchall()
@@ -153,8 +165,9 @@ def folder_tree(request: Request):
     with closing(_conn()) as c:
         folder_rows = c.execute("""SELECT folder_id,parent_id,name,path
           FROM douyin_gallery_folders ORDER BY name COLLATE NOCASE""").fetchall()
-        direct_counts = dict(c.execute("""SELECT folder_id,count(*)
-          FROM douyin_gallery_items GROUP BY folder_id""").fetchall())
+        active = _active_expr(c)
+        direct_counts = dict(c.execute(f"""SELECT folder_id,count(*)
+          FROM douyin_gallery_items WHERE {active} GROUP BY folder_id""").fetchall())
     nodes = {r["folder_id"]: {"folder_id": r["folder_id"], "parent_id": r["parent_id"],
             "name": r["name"], "path": r["path"], "image_count": int(direct_counts.get(r["folder_id"], 0)),
             "child_count": 0} for r in folder_rows}
@@ -179,6 +192,7 @@ def items(request: Request, folder_id: str = ROOT_ID, q: str = "",
         folder = c.execute("SELECT path FROM douyin_gallery_folders WHERE folder_id=?", (folder_id,)).fetchone()
         if not folder:
             raise HTTPException(404, "目录不存在")
+        where.append(_active_expr(c))
         if folder_id != ROOT_ID:
             prefix = "抖音主图/" + folder["path"].rstrip("/") + "/"
             where.append("(folder_id=? OR substr(source_path,1,length(?))=?)")
@@ -203,7 +217,8 @@ def items(request: Request, folder_id: str = ROOT_ID, q: str = "",
 def image(item_id: str, request: Request):
     _require_login(request)
     with closing(_conn()) as c:
-        row = c.execute("SELECT local_path,extension FROM douyin_gallery_items WHERE item_id=?",
+        active = _active_expr(c)
+        row = c.execute(f"SELECT local_path,extension FROM douyin_gallery_items WHERE item_id=? AND {active}",
                          (item_id,)).fetchone()
     if not row:
         raise HTTPException(404, "图片不存在")

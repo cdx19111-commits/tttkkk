@@ -1,0 +1,39 @@
+# Reference service block for /opt/gallery-mvp/compose.yaml.
+# Merge this service into the production compose file; do not use this file alone.
+services:
+  main-image-api:
+    image: gallery-main-image-api:${MAIN_IMAGE_TAG:?set an immutable tag}
+    read_only: true
+    environment:
+      - MAIN_IMAGE_V03_ROOT=/data/v03
+      - MAIN_IMAGE_GALLERY_DB=/data/v03/gallery.db
+      - MAIN_IMAGE_OUTPUT_ROOT=/data/v03
+      - MAIN_IMAGE_DATA_DIR=/data/main-image
+      - MAIN_IMAGE_SERVICE_DB=/data/main-image/main_images.db
+      - MAIN_IMAGE_TEMPLATE_DIR=/data/main-image/templates
+      - MAIN_IMAGE_BACKUP_DIR=/backup/main-image
+      - MAIN_IMAGE_THUMB_DIR=/data/main-image/thumbs
+      - MAIN_IMAGE_FONT_PATH=/data/fonts/NotoSansCJK-Regular.ttc
+      - MAIN_IMAGE_GALLERY_WRITE=1
+      - MAIN_IMAGE_AUTO_ENABLED=0
+      - MAIN_IMAGE_AUTO_TIME=02:30
+      - MAIN_IMAGE_AUTO_SHOPS=129675602
+    # gallery.db uses SQLite DELETE journaling, so the directory must be writable
+    # for its journal file. The service only writes gallery.db rows and
+    # douyin_main_images; assets remain read-only by code convention.
+    volumes:
+      - ./v03data:/data/v03:rw
+      - ./main-image-data:/data/main-image:rw
+      - ./backup/main-image:/backup/main-image:rw
+      - ./data/fonts:/data/fonts:ro
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    networks:
+      - default
+      - white-gallery-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 8s
+      retries: 3

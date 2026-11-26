@@ -241,7 +241,7 @@ async def aggregate_openapi(request: Request):
     try:
         for service in ("http://white-gallery-api:8000", "http://coverage-api:8000",
                         "http://governance-api:8000", "http://douyin-api:8000",
-                        "http://integration-api:8000"):
+                        "http://integration-api:8000", "http://main-image-api:8000"):
             try:
                 response = await client.get(f"{service}/openapi.json",
                                             headers={"x-gallery-role": role})

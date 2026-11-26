@@ -11,6 +11,7 @@ COVERAGE_SERVICE = "http://coverage-api:8000"
 GOVERNANCE_SERVICE = "http://governance-api:8000"
 DOUYIN_SERVICE = "http://douyin-api:8000"
 INTEGRATION_SERVICE = "http://integration-api:8000"
+MAIN_IMAGE_SERVICE = "http://main-image-api:8000"
 # Explicit contracts only: the gateway never forwards arbitrary paths or methods.
 CONTRACTS = {
     GOVERNANCE_SERVICE: {
@@ -19,6 +20,7 @@ CONTRACTS = {
     },
     DOUYIN_SERVICE: {"/api/v1/douyin-gallery/{rest:path}": {"GET", "HEAD"}},
     INTEGRATION_SERVICE: {"/openapi/v1/{rest:path}": {"GET", "HEAD", "POST"}},
+    MAIN_IMAGE_SERVICE: {"/api/v1/main-images/{rest:path}": {"GET", "HEAD", "POST"}},
 }
 
 HOP_BY_HOP = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
