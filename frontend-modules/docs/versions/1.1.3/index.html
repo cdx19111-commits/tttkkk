@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>图片资产管理平台 · API 接入指南</title>
+<link rel="stylesheet" href="module.css">
+</head>
+<body>
+
+<div class="mask" id="mask"></div>
+
+<aside class="side" id="side">
+  <div class="side-logo">
+    <span class="mark">图</span>
+    <div class="txt">
+      <strong>图片资产管理平台</strong>
+      <span>API Guide</span>
+    </div>
+  </div>
+
+  <nav class="side-nav" id="sideNav">
+    <div class="nav-label">接入指南</div>
+    <a href="#what"><span class="dot"></span>能做什么</a>
+    <a href="#call"><span class="dot"></span>怎么调用</a>
+    <a href="#result"><span class="dot"></span>返回什么</a>
+    <a href="#image"><span class="dot"></span>怎么拿到图片</a>
+    <a href="#model-color"><span class="dot"></span>型号与颜色</a>
+    <a href="#api-inventory"><span class="dot"></span>当前接口清单</a>
+    <a href="#listing-service"><span class="dot"></span>业务接口对接</a>
+    <a href="#swagger"><span class="dot"></span>在线接口调试</a>
+  </nav>
+
+  <div class="side-foot">
+    <div>文档版本 <b>1.1.3</b></div>
+    <div>核心接口 <b>/api/v1/images</b></div>
+  </div>
+</aside>
+
+<div class="wrap">
+  <header class="topbar">
+    <button class="menu-btn" id="menuBtn" aria-label="打开导航">☰</button>
+    <div class="crumb">图片资产管理平台 · <b>API 接入指南</b></div>
+    <div class="spacer"></div>
+    <a class="back" href="/">返回图库</a>
+  </header>
+
+  <main class="doc">
+
+    <div class="hero">
+      <span class="eyebrow">图片查询 · 商品素材对接</span>
+      <h1>图片资产管理平台 API 接入指南</h1>
+      <p class="lede">
+        提供商品信息，调用一个图片查询接口，就能拿到可用图片的信息，再按授权方式取图。
+        图片查询使用 <code>GET /api/v1/images</code>；商品上架素材对接使用 <a href="#listing-service">业务对接接口</a>，支持型号查询、素材解析、批量预检和原图下载。
+      </p>
+    </div>
+
+    <!-- ============ 1 能做什么 ============ -->
+    <h2 class="sec" id="what">能做什么</h2>
+    <p class="sec-sub">按商品信息查询图库中的图片，供业务系统程序化调用。</p>
+
+    <div class="card">
+      <p>传入商品的品类、品牌、型号、颜色，接口返回匹配到的图片清单：每张图的图片 ID、品牌、型号、颜色、尺寸，
+      以及取图和下载的地址。</p>
+      <p>适合用在商品上架、素材整理、批量导出这类需要自动取图的流程里。</p>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h4>支持的筛选维度</h4>
+        <p><span class="badge opt">品类</span> 手机 / 平板电脑 / 智能手表 / 笔记本</p>
+        <p><span class="badge opt">品牌</span> 例如 Apple、华为、小米</p>
+        <p><span class="badge opt">型号</span> 可按型号关键词查找；需要精确标准型号时使用 <code>model_exact</code>，并可指定 <code>model_source</code></p>
+        <p><span class="badge opt">颜色</span> 例如 蓝色、冰川蓝色</p>
+      </div>
+      <div class="card">
+        <h4>直接按商品信息查询</h4>
+        <p>品牌、型号、颜色可组合筛选。型号与颜色覆盖持续扩展，按需传入已知值查询，不需要在接入端维护固定组合清单。</p>
+      </div>
+    </div>
+
+    <div class="tip">
+      <span class="ico">i</span>
+      <p>接口只返回<strong>已确认可用</strong>的素材；未确认、已停用或受限的素材不会出现在结果里。
+      需要登录后才能调用，具体见 <a href="#image">怎么拿到图片</a>。</p>
+    </div>
+
+    <!-- ============ 2 怎么调用 ============ -->
+    <h2 class="sec" id="call">怎么调用</h2>
+    <p class="sec-sub">先登录拿会话，再用一次 GET 请求查询。</p>
+
+    <ol class="steps">
+      <li>
+        <h4>登录，拿到会话 Cookie</h4>
+        <p>图库使用账号登录，没有 API Key。登录成功后服务端下发会话 Cookie，后续请求带上它即可。</p>
+        <div class="code">
+          <div class="code-head">
+            <span class="lang">curl</span><span class="spacer"></span>
+            <button class="copy-btn" type="button">复制</button>
+          </div>
+<pre><code>curl -c cookies.txt -X POST https://picsystem.changziqi.com/login \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "username=你的账号" \
+  --data-urlencode "password=你的口令"</code></pre>
+        </div>
+      </li>
+
+      <li>
+        <h4>用商品信息查询图片</h4>
+        <p>四个维度都可以组合，不传就是全部。下面的例子查「Apple / iPhone 14 / 蓝色」：</p>
+        <div class="code">
+          <div class="code-head">
+            <span class="lang">curl</span><span class="spacer"></span>
+            <button class="copy-btn" type="button">复制</button>
+          </div>
+<pre><code>curl -b cookies.txt \
+  "https://picsystem.changziqi.com/api/v1/images?brand=Apple&model=iPhone%2014&color=%E8%93%9D%E8%89%B2&limit=10"</code></pre>
+        </div>
+
+        <div class="code">
+          <div class="code-head">
+            <span class="lang">python</span><span class="spacer"></span>
+            <button class="copy-btn" type="button">复制</button>
+          </div>
+<pre><code>import requests                     # pip install requests
+
+BASE = "https://picsystem.changziqi.com"
+s = requests.Session()
+s.post(f"{BASE}/login",
+       data={"username": "你的账号", "password": "你的口令"},
+       allow_redirects=False)        # 返回 303 即登录成功
+
+r = s.get(f"{BASE}/api/v1/images",
+          params={"brand": "Apple", "model": "iPhone 14", "color": "蓝色", "limit": 10})
+r.raise_for_status()
+data = r.json()
+print("共", data["total"], "张")
+
+for item in data["items"]:
+    print(item["id"], item["display_color"], item["width"], "x", item["height"])</code></pre>
+        </div>
+      </li>
+    </ol>
+
+    <h3 class="sub">可用的查询参数</h3>
+    <p class="sub-note">全部可选；只写你确定的那几个就够了。</p>
+
+    <div class="table-wrap">
+      <table class="param">
+        <thead><tr><th>参数</th><th>填什么</th><th>说明</th><th>示例</th></tr></thead>
+        <tbody>
+          <tr><td class="t-name" data-label="参数"><code>category</code></td>
+              <td data-label="填什么">品类</td>
+              <td data-label="说明">默认 <code>phone</code>（手机）。其他：<code>tablet</code> 平板、<code>watch</code> 手表、<code>laptop</code> 笔记本。</td>
+              <td class="t-example" data-label="示例"><code>phone</code></td></tr>
+          <tr><td class="t-name" data-label="参数"><code>brand</code></td>
+              <td data-label="填什么">品牌</td>
+              <td data-label="说明">精确匹配，写图库里显示的品牌名。</td>
+              <td class="t-example" data-label="示例"><code>Apple</code></td></tr>
+          <tr><td class="t-name" data-label="参数"><code>model</code></td>
+              <td data-label="填什么">型号</td>
+              <td data-label="说明">按图库型号名称模糊匹配。需要限定标准型号时可用 <code>model_exact</code>；目录原始型号可用 <code>model_exact</code> 配合 <code>model_source=directory</code>。列表接口当前没有 <code>model_id</code> 查询参数。</td>
+              <td class="t-example" data-label="示例"><code>iPhone 14</code></td></tr>
+          <tr><td class="t-name" data-label="参数"><code>q</code></td>
+              <td data-label="填什么">关键词</td>
+              <td data-label="说明">在品牌、型号、目录型号和颜色中模糊搜索。</td>
+              <td class="t-example" data-label="示例"><code>iPhone 14</code></td></tr>
+          <tr><td class="t-name" data-label="参数"><code>group</code></td>
+              <td data-label="填什么">品牌组</td>
+              <td data-label="说明">按品牌组筛选：<code>xiaomi</code>、<code>vivo</code>、<code>oppo</code>。</td>
+              <td class="t-example" data-label="示例"><code>xiaomi</code></td></tr>
+          <tr><td class="t-name" data-label="参数"><code>status</code></td>
+              <td data-label="填什么">匹配状态</td>
+              <td data-label="说明">按图库匹配状态精确筛选；仅在业务确有此需求时使用。</td>
+              <td class="t-example" data-label="示例"><code>matched</code></td></tr>
+          <tr><td class="t-name" data-label="参数"><code>asset_kind</code></td>
+              <td data-label="填什么">图片用途</td>
+              <td data-label="说明">当前唯一用途分类字段；例如白底图库查询传 <code>white</code>。生产端的图片用途、覆盖统计和待确认池均以此字段为准。历史 <code>asset_type</code> 仅保留兼容，不作为筛选或分类依据。</td>
+              <td class="t-example" data-label="示例"><code>white</code></td></tr>
+          <tr><td class="t-name" data-label="参数"><code>color</code></td>
+              <td data-label="填什么">颜色</td>
+              <td data-label="说明">精确匹配。</td>
+              <td class="t-example" data-label="示例"><code>蓝色</code></td></tr>
+          <tr><td class="t-name" data-label="参数"><code>limit</code> / <code>offset</code></td>
+              <td data-label="填什么">分页</td>
+              <td data-label="说明">每页条数 1～200（默认 60）；从第几条开始，默认 0。</td>
+              <td class="t-example" data-label="示例"><code>10</code> / <code>0</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="small muted">白底图库查询应使用 <code>asset_kind=white</code>；分类依据是 <code>asset_kind</code>，历史 <code>asset_type</code> 只兼容旧调用，不再参与分类。型号×颜色组合会随图库更新；返回中的 <code>model_id</code>、<code>standard_color</code> 是核对精确组合的依据。列表以 <code>limit</code> / <code>offset</code> 分页，必须遍历到 <code>total</code> 覆盖完整结果。</p>
+
+    <h3 class="sub" id="model-color">型号与颜色组合</h3>
+    <div class="card">
+      <p>组合规模较大且会变化，接入方不应把完整的型号×颜色清单固化在程序或本文档中。需要枚举时，按已知型号筛选后分页读取，并从返回记录提取 <code>model_id</code> 与 <code>standard_color</code>。</p>
+      <p>当前 <code>GET /api/v1/images</code> 支持型号名称模糊参数 <code>model</code>、标准/目录型号精确名称 <code>model_exact</code> 和来源 <code>model_source</code>，但不支持通过 <code>model_id</code> 直接筛选。用 Gaia ID 对账时，应核对返回记录中的 <code>model_id</code>。</p>
+      <p>颜色筛选 <code>color</code> 为精确匹配展示颜色；验证标准颜色组合时，应使用响应记录中的 <code>standard_color</code> 字段，不要仅凭展示色名推断等价。</p>
+    </div>
+
+    <!-- ============ 3 返回什么 ============ -->
+    <h2 class="sec" id="result">返回什么</h2>
+    <p class="sec-sub">返回 JSON，每张图一条记录。下面是真实响应（只保留业务关心的字段）。</p>
+
+    <div class="code">
+      <div class="code-head">
+        <span class="lang">json</span><span class="spacer"></span>
+        <button class="copy-btn" type="button">复制</button>
+      </div>
+<pre><code>{
+  "total": 1,
+  "limit": 10,
+  "offset": 0,
+  "items": [
+    {
+      "id": "img_25807e9a7151",
+      "display_brand": "Apple",
+      "model_name": "苹果 iPhone 14",
+      "display_color": "蓝色",
+      "format": "JPEG",
+      "width": 1600,
+      "height": 1600,
+      "size_bytes": 408896,
+      "can_view_original": true,
+      "can_download": true,
+      "file_url": "/api/v1/images/img_25807e9a7151/file",
+      "thumb_url": "/api/v1/images/img_25807e9a7151/file?w=320",
+      "download_url": "/api/v1/images/img_25807e9a7151/download"
+    }
+  ]
+}</code></pre>
+    </div>
+
+    <h3 class="sub">业务需要关心的字段</h3>
+    <div class="table-wrap">
+      <table class="param">
+        <thead><tr><th>字段</th><th>含义</th></tr></thead>
+        <tbody>
+          <tr><td class="t-name" data-label="字段"><code>total</code></td>
+              <td data-label="含义">符合条件的图片总数，用于判断要不要翻页。</td></tr>
+          <tr><td class="t-name" data-label="字段"><code>items[].id</code></td>
+              <td data-label="含义">图片 ID。取图、下载时用它拼地址。</td></tr>
+          <tr><td class="t-name" data-label="字段"><code>items[].display_brand</code></td>
+              <td data-label="含义">品牌，例如 Apple。</td></tr>
+          <tr><td class="t-name" data-label="字段"><code>items[].model_name</code></td>
+              <td data-label="含义">标准型号，例如 苹果 iPhone 14。</td></tr>
+          <tr><td class="t-name" data-label="字段"><code>items[].display_color</code></td>
+              <td data-label="含义">颜色，例如 蓝色。</td></tr>
+          <tr><td class="t-name" data-label="字段"><code>items[].format</code> / <code>width</code> / <code>height</code> / <code>size_bytes</code></td>
+              <td data-label="含义">格式、像素宽高、文件大小（字节），用于判断素材是否满足投放要求。</td></tr>
+          <tr><td class="t-name" data-label="字段"><code>items[].file_url</code></td>
+              <td data-label="含义">取原图的相对地址。拼上站点域名即可请求。</td></tr>
+          <tr><td class="t-name" data-label="字段"><code>items[].thumb_url</code></td>
+              <td data-label="含义">缩略图地址（宽 320 的 WebP），适合列表展示。</td></tr>
+          <tr><td class="t-name" data-label="字段"><code>items[].download_url</code></td>
+              <td data-label="含义">下载地址，返回带规范文件名的附件。</td></tr>
+          <tr><td class="t-name" data-label="字段"><code>items[].can_view_original</code> / <code>can_download</code></td>
+              <td data-label="含义">这张图当前是否允许看原图、是否允许下载。为 <code>false</code> 时只可用缩略图。</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="small muted">
+      接口不返回服务器本地路径，也不会返回内部治理字段；取图请一律使用上面三个 url 字段。
+    </p>
+
+    <!-- ============ 4 怎么拿到图片 ============ -->
+    <h2 class="sec" id="image">怎么拿到图片</h2>
+    <p class="sec-sub">查询接口返回的是图片信息，不是图片文件本身 —— 取图需要再发起一次请求。</p>
+
+    <div class="tip warn">
+      <span class="ico">!</span>
+      <p><strong>这一点必须说清楚：</strong><code>GET /api/v1/images</code> 只返回 JSON（
+      <code>application/json</code>），不会直接返回图片字节。要拿到图，用返回里的
+      <code>file_url</code> 或 <code>download_url</code> 再请求一次，并且<strong>同样要带登录会话</strong>。</p>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h4>方式一：取原图（用于预览、后续处理）</h4>
+        <p>请求 <code>file_url</code>，返回图片本身。加 <code>?w=320</code> 返回缩略图。</p>
+        <div class="code">
+          <div class="code-head">
+            <span class="lang">curl</span><span class="spacer"></span>
+            <button class="copy-btn" type="button">复制</button>
+          </div>
+<pre><code>curl -b cookies.txt -o image.jpg \
+  "https://picsystem.changziqi.com/api/v1/images/img_25807e9a7151/file"</code></pre>
+        </div>
+      </div>
+      <div class="card">
+        <h4>方式二：下载（用于交付、归档）</h4>
+        <p>请求 <code>download_url</code>，服务端会带上规范文件名。</p>
+        <div class="code">
+          <div class="code-head">
+            <span class="lang">curl</span><span class="spacer"></span>
+            <button class="copy-btn" type="button">复制</button>
+          </div>
+<pre><code>curl -b cookies.txt -OJ \
+  "https://picsystem.changziqi.com/api/v1/images/img_25807e9a7151/download"</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="sub">完整流程（查询 → 取图）</h3>
+    <div class="code">
+      <div class="code-head">
+        <span class="lang">python</span><span class="spacer"></span>
+        <button class="copy-btn" type="button">复制</button>
+      </div>
+<pre><code>import requests
+
+BASE = "https://picsystem.changziqi.com"
+s = requests.Session()
+s.post(f"{BASE}/login", data={"username": "你的账号", "password": "你的口令"},
+       allow_redirects=False)
+
+items = s.get(f"{BASE}/api/v1/images",
+              params={"brand": "Apple", "model": "iPhone 14", "limit": 1}).json()["items"]
+
+first = items[0]
+if not first["can_download"]:
+    raise SystemExit("这张图当前不允许下载，只能使用缩略图")
+
+img = s.get(BASE + first["download_url"])
+img.raise_for_status()
+open("image.jpg", "wb").write(img.content)
+print("已保存", first["display_brand"], first["model_name"], first["display_color"])</code></pre>
+    </div>
+
+    <h3 class="sub">权限与访问范围</h3>
+    <div class="card">
+      <p><strong>登录方式：</strong>账号 + 口令，服务端下发会话 Cookie（HttpOnly）。目前<strong>没有 API Key</strong>，
+      也不支持 <code>Bearer</code> 令牌；未登录访问会返回 <code>401</code>。</p>
+      <p><strong>适用范围：</strong>适合人工登录后的操作，以及同一会话内的脚本和内部工具；
+      暂不适合其他系统用固定凭据长期无人值守对接 —— 这类能力需要另行立项补齐。</p>
+      <p><strong>素材范围：</strong>只返回已确认可用的素材；未确认、已停用或受限的素材不通过本接口开放。
+      <code>can_view_original</code> / <code>can_download</code> 为 <code>false</code> 时，说明该素材当前只允许缩略图预览。</p>
+    </div>
+
+    <h2 class="sec" id="api-inventory">当前接口清单</h2>
+    <p class="sec-sub">下表直接读取当前登录服务的 <code>/openapi.json</code>。接口新增或调整后重新打开本页即可看到最新路由、方法和参数；完整交互式定义可打开 <a href="/api-docs" target="_blank" rel="noopener">Swagger 接口详情</a>。</p>
+    <div class="card api-inventory-card">
+      <div class="api-inventory-head"><strong>在线 API 路由</strong><span id="apiInventoryMeta" class="muted">正在读取当前接口定义…</span></div>
+      <div id="apiInventory" class="api-inventory" aria-live="polite"></div>
+      <p id="apiInventoryError" class="small muted" hidden>当前接口定义暂时不可用，可打开 Swagger 接口详情查看。</p>
+    </div>
+
+    <div class="doc-foot">
+      本文档只描述现有接口能力，不改变任何接口路径、参数、返回结构或权限策略。<br>
+      核心业务接口 <code>GET /api/v1/images</code> · 池管理接口 <code>/api/v1/pool-management/*</code> · 页面接口清单实时读取 OpenAPI。
+    </div>
+
+
+    <section id="listing-service" class="card">
+      <h2>业务接口对接 · 独立服务</h2>
+      <p>当前对接接口使用图库已有登录 Cookie，未登录返回 JSON 401。当前支持手机型号查询、素材解析、预检和下载；不提供上传、审核或删除操作。</p>
+      <h3 class="sub">图片准入口径（2026-11-26 起）</h3>
+      <p><strong>白底图库中 <code>quality_level=A</code> 的图片即业务可用，<code>quality_flags</code> 不再参与准入判定。</strong>历史批次标记格式不同、或标记为空，都不再影响调用方判断。</p>
+      <p>接口返回的 <code>quality_flags</code> 统一为固定 5 键结构，可直接按下列字段校验：</p>
+      <div class="code"><pre><code>{
+  "white_background": "yes",
+  "single_product": true,
+  "marketing_or_watermark": "no",
+  "model_mismatch_suspicion": "none",
+  "human_review": "confirmed"
+}</code></pre></div>
+      <p>结论来源见 <code>review_basis</code>：<code>per_image_human_approved</code> 为逐图人工确认，<code>business_batch_confirmed_20261126</code> 为业务批量确认，<code>shop_main_image_not_subject_to_white_audit</code> 为店铺主图（不做白底审核）。</p>
+      <p>技术门槛保持不变：正方形且短边不少于 600 像素、单张不超过 3,000,000 字节、格式为 JPEG/PNG/WebP，并满足型号与 Gaia 标准颜色匹配。不满足时 <code>eligibility_status</code> 为 <code>ineligible</code>，原因写在 <code>reject_reasons</code>。</p>
+
+      <h3 class="sub">图片关键字段</h3>
+      <div class="table-wrap">
+        <table class="param">
+          <thead><tr><th>字段</th><th>取值</th><th>含义</th></tr></thead>
+          <tbody>
+            <tr><td><code>quality_level</code></td><td><code>A</code></td><td>业务可用等级。</td></tr>
+            <tr><td><code>eligibility_status</code></td><td><code>eligible</code> / <code>ineligible</code> / <code>unknown</code></td><td>能否用于上架；<code>unknown</code> 仅在原图文件当前不可读时出现。</td></tr>
+            <tr><td><code>douyin_eligible</code></td><td><code>true</code> / <code>false</code></td><td>与 <code>eligibility_status</code> 同义的布尔值。</td></tr>
+            <tr><td><code>quality_flags</code></td><td>固定 5 键</td><td>审核结论，结构见上。</td></tr>
+            <tr><td><code>review_basis</code></td><td>枚举</td><td>结论来源，便于审计。</td></tr>
+            <tr><td><code>publish_state</code></td><td><code>published</code></td><td>手机类目不做发布流程，A 级即视为已发布。</td></tr>
+            <tr><td><code>rights_status</code></td><td><code>confirmed</code></td><td>按业务方项目级授权自动确认。</td></tr>
+            <tr><td><code>usable_scope</code></td><td><code>platform_listing</code></td><td>允许用于平台上架。</td></tr>
+            <tr><td><code>external_use_allowed</code></td><td><code>true</code></td><td>允许外部平台使用。</td></tr>
+            <tr><td><code>reject_reasons</code></td><td>数组</td><td>不可用原因；可用时为空数组。</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub">型号匹配</h3>
+      <p>支持三种入参：只传 <code>model_id</code>；或同时传 <code>brand</code> 与 <code>model</code>；或只传完整 <code>model</code> 名称。品牌名支持「华为」和「华为（HUAWEI）」两种写法。型号存在多个精确候选时返回 <code>409 MODEL_AMBIGUOUS</code> 与候选列表，不自动选择。</p>
+
+      <table><thead><tr><th>方法</th><th>路径</th><th>能力</th></tr></thead><tbody>
+        <tr><td>GET</td><td><code>/openapi/v1/listing/models</code></td><td>型号候选与精确查询</td></tr>
+        <tr><td>POST</td><td><code>/openapi/v1/listing/resolve</code></td><td>单商品素材解析</td></tr>
+        <tr><td>POST</td><td><code>/openapi/v1/listing/precheck</code></td><td>最多 50 条批量预检</td></tr>
+        <tr><td>GET</td><td><code>/openapi/v1/listing/images/{image_id}/file</code></td><td>原图字节、ETag 与条件下载</td></tr>
+      </tbody></table>
+      <p><a href="#swagger">打开在线接口调试</a> · <a href="/openapi/v1/schema.json" target="_blank" rel="noopener">读取对接服务 Schema</a></p>
+      <p class="muted">精确字段与可调用操作以当前 Schema 为准。当前使用登录 Cookie，尚未提供独立服务令牌或非手机对接能力；性能指标以联调结果为准。</p>
+    </section>
+    <section id="swagger" class="card">
+      <h2>在线接口调试</h2>
+      <p>使用当前图库登录态。选择对接接口或全部业务接口后加载；仅在需要时执行请求。</p>
+      <label for="schemaChoice">接口范围</label>
+      <select id="schemaChoice"><option value="/openapi/v1/schema.json">业务对接接口</option><option value="/openapi.json">全部业务接口</option></select>
+      <button id="loadSwagger" type="button">加载在线调试</button>
+      <p id="swaggerStatus" role="status"></p>
+      <div id="swagger-ui"></div>
+    </section>
+  </main>
+</div>
+
+<script src="module.js"></script>
+</body>
+</html>
