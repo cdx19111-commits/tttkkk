@@ -9,7 +9,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import sys
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+for _parent in (Path(__file__).resolve().parents[2], Path(__file__).resolve().parents[1]):
+    if (_parent / "app" / "brands.py").is_file():
+        sys.path.insert(0, str(_parent))
+        break
 
 from app import brands  # noqa: E402
 
