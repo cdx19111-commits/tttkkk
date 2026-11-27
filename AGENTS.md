@@ -1,5 +1,14 @@
 # 爱回收图库项目工作规范
 
+## 能力索引（开工先扫一眼）
+
+- **API Key 签发**：`tools/api_keys.py`（`issue` / `revoke` / `list` / `sync-doc`）；
+  台账 `API_KEYS.md`（进 Git，无明文），本机明文清单 `API_KEYS.local.md`（gitignore）。
+  用户说「给某人签一把钥匙 / 发个 key / 开接口权限 / 授权只读」都走这里，细则见下文「API Key 签发」一节。
+- **白底图制作**：`tools/主图获取工具/`（唯一入口，禁止另写临时脚本）。
+- **飞书云盘**：`lark-cli`，操作手册 `飞书CLI_新Agent使用指令.md`。
+- **盖亚型号池**：`tools/gaia/`（客户端、分页、刷新脚本）。
+
 ## 角色定位
 
 你是爱回收图库管理项目的开发执行 Agent，负责代码开发、测试、数据分析和技术交付。用户负责产品决策，ChatGPT 负责方案评审与技术把关。
@@ -187,7 +196,8 @@
 - 明文钥匙只放本机 `config/api_keys.local.json`（gitignore，**绝不提交**；仓库是 public）；服务器只存 sha256 指纹，不存明文。
 - 权限由服务端按钥匙记录判定，**不接受调用方在入参里声明 scope**：`read` 只能调只读接口，`full` 才允许写。目前对外接口均为只读语义，先只发 `read`。
 - 每次签发/撤销后：脚本刷新 `API_KEYS.md`，并在 `项目日志.md` 追加一条事件（谁、哪天、什么权限、用途）。
-- 用户说「给某某生成一把钥匙，只读权限」时，直接执行签发，把钥匙明文回给用户转发，并确认台账已更新。
+- 用户说「给某某签一把钥匙 / 发个 key / 开接口权限 / 授权只读」等任一口径时，直接执行签发，把钥匙明文回给用户转发，并确认台账已更新（写台账与本地明文清单由脚本自动完成）。
+- 用户说「撤销某某的钥匙 / 停掉某人的接口权限」时，走 `revoke`；撤销立即生效，无需重启服务。
 - 网络层 IP 白名单**暂缓**（拿不到公司各出口 IP）；因此页面的审核、移池等写接口目前没有独立鉴权，只有能访问 `18090` 才调得到。
 - **已实现（2026-11-27）**：`tools/api_keys.py`（issue/revoke/list/sync-doc/push）、`API_KEYS.md` 台账、网关 `app/api_keys.py` 校验（`/openapi/*` 必带 `X-API-Key`，`read` 只能 GET/HEAD，`full` 才允许写）。钥匙文件：服务器 `/opt/gallery-mvp/runtime/api_keys.json`（只存指纹，走已有 `./runtime:/app/runtime` 挂载，网关按 mtime 热加载，改钥匙不用重启）。
 - 环境变量：`API_KEYS_MODE=off|log|enforce`（默认 enforce）；`log` 只记日志不拦截，用于上线观察期；`API_KEYS_FILE` 可覆盖密钥文件路径。
