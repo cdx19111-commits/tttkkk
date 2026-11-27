@@ -26,6 +26,9 @@ def test_active_filter_and_image_serving(tmp_path, monkeypatch):
     conn.execute("""insert into douyin_gallery_folders
         (folder_id,parent_id,name,path,source_token) values (?,?,?,?,?)""",
         (douyin_gallery.ROOT_ID, "", "抖音主图", "", douyin_gallery.ROOT_TOKEN))
+    conn.execute("""insert into douyin_gallery_folders
+        (folder_id,parent_id,name,path,source_token) values (?,?,?,?,?)""",
+        ("dyf-shop", douyin_gallery.ROOT_ID, "129675602", "129675602", "tok-shop"))
     conn.executemany("""insert into douyin_gallery_items
         (item_id,source_token,folder_id,source_path,name,extension,local_path,sha256,
          size_bytes,width,height,source_url,imported_at,is_active)
@@ -60,3 +63,11 @@ def test_active_filter_and_image_serving(tmp_path, monkeypatch):
 
     assert client.get("/api/v1/douyin-gallery/items/dy-active/image").status_code == 200
     assert client.get("/api/v1/douyin-gallery/items/dy-archived/image").status_code == 404
+
+    tree = client.get("/api/v1/douyin-gallery/folder-tree").json()
+    shop_node = next(node for node in tree["items"] if node["folder_id"] == "dyf-shop")
+    assert shop_node["name"] == "爱回收官方旗舰店（许杨）"
+
+    folders = client.get("/api/v1/douyin-gallery/folders").json()
+    shop_folder = next(item for item in folders["items"] if item["folder_id"] == "dyf-shop")
+    assert shop_folder["name"] == "爱回收官方旗舰店（许杨）"

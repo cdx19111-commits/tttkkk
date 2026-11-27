@@ -32,6 +32,7 @@ if str(SERVICE_ROOT) not in sys.path:
 
 from catalog import (ExistingMain, Target, _template_for, brand_group, is_black,
                      load_all_sources, load_shop_targets, orientation_ok, target_key)  # noqa: E402
+from app.shop_directory import SHOP_DIRECTORY, shop_label  # noqa: E402
 from engine import compose, cutout_product, foreground_luminance, load_config  # noqa: E402
 from sample_config import (BACKUP_ROOT, FONT_PATH, META_DB, OUTPUT_V03, REAL_DB, REAL_V03,
                            SAMPLE_ROOT, SAMPLE_V03, SHOP_ID, SHOP_NAME,
@@ -48,17 +49,7 @@ RUN_LOCK = threading.Lock()
 # snapshot, so the existing Douyin gallery shows the generated image instead
 # of a second/parallel item.  Production uses the same idea under v03data.
 SERVICE_V03 = OUTPUT_V03
-SHOP_NAMES = {
-    "129675602": "爱回收官方旗舰店",
-    "25595926": "拍拍二手悦玥手机专卖店",
-    "636781": "爱回收二手手机旗舰店",
-    "7970406": "爱回收严选二手数码",
-    "51165770": "爱回收严选二手优品",
-    "168976032": "拍拍严选手机优品",
-    "5576543": "拍拍严选二手手机",
-    "156450040": "拍拍二手数码",
-    "208501840": "返航新生二手手机旗舰店",
-}
+SHOP_NAMES = {shop_id: shop_label(shop_id) for shop_id in SHOP_DIRECTORY}
 TZ = ZoneInfo("Asia/Shanghai")
 AUTO_ENABLED = os.getenv("MAIN_IMAGE_AUTO_ENABLED", "0") == "1"
 AUTO_TIME = os.getenv("MAIN_IMAGE_AUTO_TIME", "02:30")

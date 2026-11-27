@@ -24,22 +24,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from catalog import _parse_item, brand_group, model_key, target_key
+from app.shop_directory import SHOP_DIRECTORY, shop_label
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_GALLERY = ROOT.parent / "local" / "data" / "real" / "v03" / "gallery.db"
 DEFAULT_ASSET_ROOT = ROOT.parent / "local" / "data" / "real" / "v03"
 DEFAULT_GENERATED = ROOT / "service_data" / "main_images.db"
-SHOP_NAMES = {
-    "129675602": "爱回收官方旗舰店",
-    "25595926": "拍拍二手悦玥手机专卖店",
-    "636781": "爱回收二手手机旗舰店",
-    "7970406": "爱回收严选二手数码",
-    "51165770": "爱回收严选二手优品",
-    "168976032": "拍拍严选手机优品",
-    "5576543": "拍拍严选二手手机",
-    "156450040": "拍拍二手数码",
-    "208501840": "返航新生二手手机旗舰店",
-}
+SHOP_NAMES = {shop_id: shop_label(shop_id) for shop_id in SHOP_DIRECTORY}
 
 
 def sha256(path: Path) -> str:

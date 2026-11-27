@@ -8,7 +8,7 @@ ARG PIP_OFFLINE=0
 RUN PIP_NO_INDEX=$PIP_OFFLINE PIP_DISABLE_PIP_VERSION_CHECK=1 \
     pip install --no-cache-dir -r /app/requirements.txt
 RUN mkdir -p /app/app
-COPY app/__init__.py app/brands.py app/service_auth.py /app/app/
+COPY app/__init__.py app/brands.py app/service_auth.py app/shop_directory.py /app/app/
 COPY dev/main-image-service/*.py /app/main-image-service/
 COPY dev/main-image-service/tool /app/main-image-service/tool
 RUN python -c "import sys; sys.path.insert(0, '/app/main-image-service'); import server"

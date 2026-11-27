@@ -7,7 +7,7 @@ COPY requirements.douyin-api.txt /app/requirements.txt
 ARG PIP_OFFLINE=0
 RUN PIP_NO_INDEX=$PIP_OFFLINE PIP_DISABLE_PIP_VERSION_CHECK=1 pip install --no-cache-dir -r /app/requirements.txt
 RUN mkdir -p /app/app/static
-COPY app/__init__.py app/storage_contract.py app/douyin_gallery.py app/service_auth.py app/douyin_service.py /app/app/
+COPY app/__init__.py app/storage_contract.py app/douyin_gallery.py app/shop_directory.py app/service_auth.py app/douyin_service.py /app/app/
 RUN touch /app/app/static/model_params.json
 RUN python -c "import app.douyin_service"
 CMD ["uvicorn", "app.douyin_service:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

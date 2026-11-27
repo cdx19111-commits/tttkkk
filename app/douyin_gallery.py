@@ -14,6 +14,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 
 from .storage_contract import ASSET_DB, ASSET_ROOT
+from .shop_directory import SHOP_DIRECTORY, shop_label
 
 router = APIRouter(prefix="/api/v1/douyin-gallery", tags=["douyin gallery"])
 ASSET_DIR = ASSET_ROOT / "douyin_main_images"
@@ -39,6 +40,14 @@ def _active_expr(c: sqlite3.Connection, alias: str = "") -> str:
     if "is_active" not in cols:
         return "1=1"
     return f"coalesce({alias + '.' if alias else ''}is_active,1)=1"
+
+
+def _display_folder_name(row: sqlite3.Row) -> str:
+    """Show shop id folders as '店铺名称（负责人）'; keep deeper paths untouched."""
+    path = str(row["path"] or "")
+    if row["parent_id"] == ROOT_ID and path in SHOP_DIRECTORY:
+        return shop_label(path)
+    return str(row["name"])
 
 
 def _require_login(request: Request) -> None:
@@ -149,13 +158,18 @@ def folders(request: Request, parent_id: str = ROOT_ID):
         if not parent:
             raise HTTPException(404, "目录不存在")
         active = _active_expr(c, "i")
-        rows = c.execute(f"""SELECT f.folder_id,f.name,f.path,
+        rows = c.execute(f"""SELECT f.folder_id,f.parent_id,f.name,f.path,
           (SELECT count(*) FROM douyin_gallery_items i WHERE {active} AND
              (i.folder_id=f.folder_id OR substr(i.source_path,1,length('抖音主图/'||f.path||'/'))='抖音主图/'||f.path||'/')) image_count,
           (SELECT count(*) FROM douyin_gallery_folders d WHERE d.parent_id=f.folder_id) child_count
           FROM douyin_gallery_folders f WHERE f.parent_id=? ORDER BY f.name COLLATE NOCASE""",
           (parent_id,)).fetchall()
-    return {"items": [dict(r) for r in rows]}
+    items = []
+    for row in rows:
+        item = dict(row)
+        item["name"] = _display_folder_name(row)
+        items.append(item)
+    return {"items": items}
 
 
 @router.get("/folder-tree")
@@ -169,7 +183,7 @@ def folder_tree(request: Request):
         direct_counts = dict(c.execute(f"""SELECT folder_id,count(*)
           FROM douyin_gallery_items WHERE {active} GROUP BY folder_id""").fetchall())
     nodes = {r["folder_id"]: {"folder_id": r["folder_id"], "parent_id": r["parent_id"],
-            "name": r["name"], "path": r["path"], "image_count": int(direct_counts.get(r["folder_id"], 0)),
+            "name": _display_folder_name(r), "path": r["path"], "image_count": int(direct_counts.get(r["folder_id"], 0)),
             "child_count": 0} for r in folder_rows}
     for node in nodes.values():
         if node["parent_id"] in nodes:
