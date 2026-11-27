@@ -23,7 +23,7 @@ from fastapi.responses import (FileResponse, JSONResponse,
                                RedirectResponse, Response)
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from . import storage_contract
+from . import api_keys, storage_contract
 from .api_proxy import router as api_proxy_router
 
 APP_DIR = Path(__file__).resolve().parent
@@ -121,6 +121,10 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
         # 2026-11-27 起入口账号密码鉴权取消：所有请求按复核（review）权限放行。
         # 保留 fail-closed 的 schema 守卫，以及写操作的同源校验（防浏览器跨站误触）。
         request.state.role = "review"
+        # 对外接口（/openapi/*）只认 X-API-Key；页面自用的 /api/* 不受影响。
+        denied = api_keys.check(request)
+        if denied is not None:
+            return denied
         if request.method not in SAFE_METHODS and not _same_origin(request):
             return JSONResponse({"detail": "跨站请求已拒绝"}, status_code=403,
                                 headers={"Cache-Control": "no-store"})

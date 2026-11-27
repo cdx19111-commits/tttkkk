@@ -1,0 +1,5 @@
+{
+ "version": 1,
+ "_comment": "示例文件，不含真实钥匙。真实记录由 tools/api_keys.py 写入 config/api_keys.local.json（gitignore）。",
+ "keys": []
+}

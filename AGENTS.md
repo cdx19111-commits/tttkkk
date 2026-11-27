@@ -188,7 +188,8 @@
 - 每次签发/撤销后：脚本刷新 `API_KEYS.md`，并在 `项目日志.md` 追加一条事件（谁、哪天、什么权限、用途）。
 - 用户说「给某某生成一把钥匙，只读权限」时，直接执行签发，把钥匙明文回给用户转发，并确认台账已更新。
 - 网络层 IP 白名单**暂缓**（拿不到公司各出口 IP）；因此页面的审核、移池等写接口目前没有独立鉴权，只有能访问 `18090` 才调得到。
-- **状态（2026-11-27）**：规则已定，`tools/api_keys.py` 与 `API_KEYS.md` **尚未实现**；建成前需要钥匙时先与用户确认，不要临时手改服务器文件或自造脚本。
+- **已实现（2026-11-27）**：`tools/api_keys.py`（issue/revoke/list/sync-doc/push）、`API_KEYS.md` 台账、网关 `app/api_keys.py` 校验（`/openapi/*` 必带 `X-API-Key`，`read` 只能 GET/HEAD，`full` 才允许写）。钥匙文件：服务器 `/opt/gallery-mvp/runtime/api_keys.json`（只存指纹，走已有 `./runtime:/app/runtime` 挂载，网关按 mtime 热加载，改钥匙不用重启）。
+- 环境变量：`API_KEYS_MODE=off|log|enforce`（默认 enforce）；`log` 只记日志不拦截，用于上线观察期；`API_KEYS_FILE` 可覆盖密钥文件路径。
 
 ## 生产服务器访问与应用发布
 
