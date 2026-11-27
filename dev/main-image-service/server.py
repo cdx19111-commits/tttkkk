@@ -1198,6 +1198,29 @@ def template_image(template_id: int):
                         headers={"Cache-Control": "private, no-cache"})
 
 
+def normalize_template_image(path: Path) -> "Image.Image":
+    """Validate an uploaded template and normalize it to a 1080x1080 RGBA canvas."""
+    from PIL import Image, ImageOps
+    with Image.open(path) as image:
+        image.load()
+        if getattr(image, "n_frames", 1) > 1:
+            raise ValueError("不支持动图模板")
+        if str(image.format or "").upper() not in {"PNG", "JPEG", "WEBP"}:
+            raise ValueError("仅支持 PNG、JPEG、WebP 模板")
+        image = ImageOps.exif_transpose(image)
+        width, height = image.size
+        if width != height:
+            raise ValueError("模板必须是正方形（宽高一致）")
+        if width < 800:
+            raise ValueError("模板至少 800×800")
+        if width > 3000:
+            raise ValueError("模板不能超过 3000×3000")
+        canvas = image.convert("RGBA")
+        if (width, height) != (1080, 1080):
+            canvas = canvas.resize((1080, 1080), Image.Resampling.LANCZOS)
+        return canvas
+
+
 @app.post("/api/v1/main-images/templates/upload")
 async def upload_template(shop_id: str = Form(""), category: str = Form(...),
                           name: str = Form(""), file: UploadFile = File(...),
@@ -1205,50 +1228,57 @@ async def upload_template(shop_id: str = Form(""), category: str = Form(...),
     content = await file.read()
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(413, "模板图不能超过 5MB")
-    temp = DATA_DIR / ".template-upload"
+    temp = DATA_DIR / f".template-upload-{uuid.uuid4().hex}"
     temp.write_bytes(content)
     try:
-        from PIL import Image
-        with Image.open(temp) as image:
-            if image.size != (1080, 1080):
-                raise HTTPException(422, "模板必须是 1080×1080")
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(422, "模板图无法解码")
-    scope = "shop" if shop_id else "global"
-    with db() as conn:
-        version = conn.execute("""select coalesce(max(version),0)+1 from main_templates
-            where scope=? and shop_id=? and category=?""", (scope, shop_id, category)).fetchone()[0]
-        base = TEMPLATE_DIR / scope / (shop_id or "default") / category
-        base.mkdir(parents=True, exist_ok=True)
-        image_path = base / f"v{version}.png"
-        shutil.move(str(temp), str(image_path))
-        if config_json:
-            cfg = json.loads(config_json)
-        else:
-            cfg = json.loads(json.dumps(default_configs()["templates"].get(category, {})))
-            if scope == "shop":
-                cfg.setdefault("product_image", {})["center_x"] = 540
-                cfg.setdefault("product_image", {})["center_y"] = 540
-                cfg.setdefault("product_name", {})["center_x"] = 540
-                cfg.setdefault("product_name", {})["center_y"] = 150
-            cfg.setdefault("product_name", {})["text"] = ""
-        cfg = dict(cfg)
-        cfg["template_path"] = str(image_path)
-        # Shop uploads stay inactive until the business saves the layout editor.
-        active = 0 if scope == "shop" else 1
-        if active:
-            conn.execute("update main_templates set active=0 where scope=? and shop_id=? and category=?",
-                         (scope, shop_id, category))
-        cur = conn.execute("""insert into main_templates
-            (scope, shop_id, category, name, image_path, config_json, version, active, created_at)
-            values (?,?,?,?,?,?,?,?,?)""",
-            (scope, shop_id, category, name or category, str(image_path),
-             json.dumps(cfg, ensure_ascii=False), version, active, now()))
-        conn.commit()
-        row = conn.execute("select * from main_templates where id=?", (cur.lastrowid,)).fetchone()
-    return template_payload(row)
+        try:
+            canvas = normalize_template_image(temp)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(422, "模板图无法解码") from exc
+        scope = "shop" if shop_id else "global"
+        with db() as conn:
+            version = conn.execute("""select coalesce(max(version),0)+1 from main_templates
+                where scope=? and shop_id=? and category=?""", (scope, shop_id, category)).fetchone()[0]
+            base = TEMPLATE_DIR / scope / (shop_id or "default") / category
+            base.mkdir(parents=True, exist_ok=True)
+            image_path = base / f"v{version}.png"
+            staging = image_path.with_name(image_path.name + f".{uuid.uuid4().hex}.tmp")
+            try:
+                canvas.save(staging, "PNG", optimize=True)
+                os.replace(staging, image_path)
+            finally:
+                staging.unlink(missing_ok=True)
+            if config_json:
+                cfg = json.loads(config_json)
+            else:
+                cfg = json.loads(json.dumps(default_configs()["templates"].get(category, {})))
+                if scope == "shop":
+                    cfg.setdefault("product_image", {})["center_x"] = 540
+                    cfg.setdefault("product_image", {})["center_y"] = 540
+                    cfg.setdefault("product_name", {})["center_x"] = 540
+                    cfg.setdefault("product_name", {})["center_y"] = 150
+                cfg.setdefault("product_name", {})["text"] = ""
+            cfg = dict(cfg)
+            cfg["template_path"] = str(image_path)
+            # Shop uploads stay inactive until the business saves the layout editor.
+            active = 0 if scope == "shop" else 1
+            if active:
+                conn.execute("update main_templates set active=0 where scope=? and shop_id=? and category=?",
+                             (scope, shop_id, category))
+            cur = conn.execute("""insert into main_templates
+                (scope, shop_id, category, name, image_path, config_json, version, active, created_at)
+                values (?,?,?,?,?,?,?,?,?)""",
+                (scope, shop_id, category, name or category, str(image_path),
+                 json.dumps(cfg, ensure_ascii=False), version, active, now()))
+            conn.commit()
+            row = conn.execute("select * from main_templates where id=?", (cur.lastrowid,)).fetchone()
+        return template_payload(row)
+    finally:
+        temp.unlink(missing_ok=True)
 
 
 @app.post("/api/v1/main-images/templates/{template_id}/config")
