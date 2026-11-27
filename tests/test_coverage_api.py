@@ -39,7 +39,7 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from app import main
 from app.main import app
-from app import auth, assets_api, coverage_monitor
+from app import assets_api, coverage_monitor
 from app.coverage_service import app as coverage_app
 
 
@@ -51,24 +51,18 @@ def current_service_boundaries(monkeypatch, tmp_path):
     main.storage_contract.reset_schema_cache()
     monkeypatch.setattr(coverage_monitor, "ASSET_DB", DB)
     monkeypatch.setattr(coverage_monitor, "POOL_PATH", POOL)
-    monkeypatch.setattr(auth, "PASSWORD_HASH", "test-only-credential-epoch")
-    monkeypatch.setattr(auth, "COOKIE_SECURE", False)
-    monkeypatch.setattr(auth, "SESSION_DB", tmp_path / "sessions.db")
-    auth.init_store()
     yield
     assets_api.reset_schema_cache()
     main.storage_contract.reset_schema_cache()
 
 
-def test_coverage_routes_are_session_protected_and_count_only_white_a(tmp_path, monkeypatch):
+def test_coverage_routes_open_access_and_count_only_white_a(tmp_path, monkeypatch):
     make_frontend_module(tmp_path)
     monkeypatch.setattr(main, "FRONTEND_MODULE_ROOT", tmp_path)
     anonymous = TestClient(app)
-    assert anonymous.get("/api/v1/coverage-monitor").status_code == 401
-    assert anonymous.get("/frontend-modules/manifest.json").status_code == 401
-    client = TestClient(app)
-    client.cookies.set(auth.COOKIE_NAME, auth.create_session("127.0.0.1", "coverage-test"))
-    # The gateway auth and private read service are now separate runtime units.
+    # 2026-11-27 起入口鉴权取消：网关本地路由无需登录即可访问。
+    assert anonymous.get("/frontend-modules/manifest.json").status_code == 200
+    # 私有读服务仍必须由网关注入角色，未带角色一律 401。
     private_client = TestClient(coverage_app)
     private_client.headers["x-gallery-role"] = "business"
     assert TestClient(coverage_app).get("/api/v1/coverage-monitor").status_code == 401
@@ -87,13 +81,12 @@ def test_coverage_routes_are_session_protected_and_count_only_white_a(tmp_path, 
     assert counts["white_A_visible"] == 1
     assert counts["douyin_main_separate"] == 1
     assert counts["douyin_marked_in_phone_base"] == 1
-    assert client.get("/").status_code == 200
-    assert 'id="module-nav-items"' in client.get("/").text
-    manifest = client.get("/frontend-modules/manifest.json").json()
+    assert anonymous.get("/").status_code == 200
+    assert 'id="module-nav-items"' in anonymous.get("/").text
+    manifest = anonymous.get("/frontend-modules/manifest.json").json()
     assert [item["id"] for item in manifest["modules"]] == ["coverage"]
     module_script = manifest["modules"][0]["script_url"]
-    assert anonymous.get(module_script).status_code == 401
-    assert client.get(module_script).status_code == 200
+    assert anonymous.get(module_script).status_code == 200
 
 
 def make_frontend_module(root, module_id="coverage", version="1.0.0", surface=None):
@@ -140,12 +133,10 @@ def test_route_surface_module_is_not_added_to_spa_manifest_and_docs_redirects(tm
     assert response.headers["location"] == "/frontend-modules/docs/1.0.0/index.html"
 
     anonymous = TestClient(app)
-    assert anonymous.get("/docs", follow_redirects=False).status_code == 401
-    client = TestClient(app)
-    client.cookies.set(auth.COOKIE_NAME, auth.create_session("127.0.0.1", "docs-module-test"))
-    page = client.get("/docs", follow_redirects=False)
+    page = anonymous.get("/docs", follow_redirects=False)
     assert page.status_code == 302
-    module_page = client.get(page.headers["location"])
+    assert page.status_code == 302
+    module_page = anonymous.get(page.headers["location"])
     assert module_page.status_code == 200
     assert 'href="module.css"' in module_page.text
     assert 'src="module.js"' in module_page.text
