@@ -1,12 +1,20 @@
 """Read-only HTTP endpoint for live Gaia-to-white-gallery coverage."""
 from __future__ import annotations
 
+import csv
+import io
 import json
 import os
+import queue
+import re
 import sqlite3
+import threading
+import zipfile
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
 
 from .coverage_engine import _norm, asset_pools_summary, calculate, white_pool_rows
 from .model_parameters import model_params_for
@@ -14,6 +22,7 @@ from .storage_contract import read_gaia_pool, read_phone_rows
 
 router = APIRouter(prefix="/api/v1", tags=["coverage-monitor"])
 POOL_PATH = Path(os.getenv("GAIA_MODEL_POOL_PATH", "/app/gaia_runtime/gaia_model_pool.json"))
+ASSET_ROOT = Path(os.getenv("ASSET_ROOT", "/data/v03"))
 ASSET_DB = Path(os.getenv("ASSET_DB", str(Path(os.getenv("ASSET_ROOT", "/data/v03")) / "gallery.db")))
 
 
@@ -35,6 +44,182 @@ def _phone_rows() -> list[dict]:
 
 def _key(value: str) -> str:
     return _norm(value)
+
+
+EXPORT_MAX_FILES = 6000
+EXPORT_MAX_BYTES = 8 * 1024 ** 3
+_SAFE_PART = re.compile(r'[\\/:*?"<>|\x00-\x1f]+')
+
+
+class _ExportStopped(Exception):
+    pass
+
+
+class _ZipQueue(io.RawIOBase):
+    """Non-seekable writer so ZipFile streams through the HTTP response."""
+
+    def __init__(self, channel: queue.Queue, stop: threading.Event):
+        self.channel = channel
+        self.stop = stop
+
+    def writable(self) -> bool:
+        return True
+
+    def write(self, data) -> int:
+        payload = bytes(data)
+        while not self.stop.is_set():
+            try:
+                self.channel.put(payload, timeout=0.5)
+                return len(payload)
+            except queue.Full:
+                continue
+        raise _ExportStopped()
+
+
+def _safe_part(value: object) -> str:
+    text = _SAFE_PART.sub("_", str(value or "")).strip(" .")
+    return text or "未命名"
+
+
+def _download_entries(q: str = "", brand: str = "", model_id: str = "", color: str = ""):
+    pool = _pool()
+    gallery, _excluded = white_pool_rows(_phone_rows())
+    by_model: dict[str, list[dict]] = {}
+    for row in gallery:
+        by_model.setdefault(str(row["_model_id"]), []).append(row)
+    needle = _key(q)
+    models = [m for m in pool["models"] if not needle or needle in _key(
+        str(m.get("brand", "")) + str(m.get("model", "")) + str(m.get("model_id", "")) + " ".join(m.get("colors", [])))]
+    models = [m for m in models if (not brand or m.get("brand") == brand)
+              and (not model_id or str(m.get("model_id")) == model_id)
+              and (not color or color in m.get("colors", []))]
+
+    root = ASSET_ROOT.resolve()
+    entries: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    for model in models:
+        mid = str(model.get("model_id"))
+        for row in by_model.get(mid, []):
+            local_path = str(row.get("local_path") or "")
+            if not local_path:
+                continue
+            path = Path(local_path)
+            if not path.is_absolute():
+                path = ASSET_ROOT / path
+            try:
+                path = path.resolve()
+                path.relative_to(root)
+            except (OSError, ValueError):
+                continue
+            if not path.is_file():
+                continue
+            image_id = str(row.get("id") or "")
+            key = (mid, image_id or str(path))
+            if key in seen:
+                continue
+            seen.add(key)
+            filename = str(row.get("filename") or row.get("name") or path.name)
+            color_name = str(row.get("standard_color") or "")
+            arcname = "/".join([
+                _safe_part(model.get("brand")),
+                _safe_part(model.get("model")),
+                _safe_part(color_name),
+                _safe_part(f"{image_id}_{filename}"),
+            ])
+            entries.append({
+                "path": path,
+                "arcname": arcname,
+                "model": str(model.get("model") or ""),
+                "brand": str(model.get("brand") or ""),
+                "model_id": mid,
+                "color": color_name,
+                "image_id": image_id,
+                "filename": filename,
+                "sha256": str(row.get("sha256") or ""),
+                "size": path.stat().st_size,
+                "local_path": local_path,
+            })
+    return pool, entries, _excluded
+
+
+def _manifest_bytes(entries: list[dict]) -> bytes:
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(["型号", "品牌", "Gaia 型号 ID", "标准颜色", "图片 ID", "文件名", "SHA256", "大小(字节)", "图库相对路径"])
+    for entry in entries:
+        writer.writerow([entry["model"], entry["brand"], entry["model_id"], entry["color"],
+                         entry["image_id"], entry["filename"], entry["sha256"], entry["size"],
+                         entry["local_path"]])
+    return ("\ufeff" + buffer.getvalue()).encode("utf-8")
+
+
+def _zip_response(entries: list[dict], total_bytes: int) -> StreamingResponse:
+    manifest = _manifest_bytes(entries)
+    channel: queue.Queue = queue.Queue(maxsize=16)
+    stop = threading.Event()
+
+    def put(item) -> None:
+        while not stop.is_set():
+            try:
+                channel.put(item, timeout=0.5)
+                return
+            except queue.Full:
+                continue
+
+    def build() -> None:
+        try:
+            with zipfile.ZipFile(_ZipQueue(channel, stop), "w", zipfile.ZIP_STORED,
+                                 allowZip64=True) as archive:
+                archive.writestr("manifest.csv", manifest)
+                for entry in entries:
+                    archive.write(str(entry["path"]), entry["arcname"])
+            put(None)
+        except _ExportStopped:
+            pass
+        except BaseException as exc:
+            put(exc)
+
+    threading.Thread(target=build, name="asset-export", daemon=True).start()
+
+    def body():
+        try:
+            while True:
+                item = channel.get()
+                if item is None:
+                    return
+                if isinstance(item, BaseException):
+                    raise item
+                yield item
+        finally:
+            stop.set()
+
+    filename = f"asset-export-{datetime.now().strftime('%Y%m%d-%H%M')}.zip"
+    return StreamingResponse(body(), media_type="application/zip", headers={
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "Cache-Control": "no-store",
+        "X-Export-Files": str(len(entries)),
+        "X-Export-Bytes": str(total_bytes),
+    })
+
+
+@router.get("/coverage-module/model-asset-download")
+def model_asset_download(q: str = "", brand: str = "", model_id: str = "", color: str = "",
+                         count: bool = False):
+    """Export the current A-pool filter as a ZIP of original images plus manifest.csv."""
+    pool, entries, _excluded = _download_entries(q, brand, model_id, color)
+    total_bytes = sum(entry["size"] for entry in entries)
+    if count:
+        return {
+            "files": len(entries),
+            "models": len({entry["model_id"] for entry in entries}),
+            "bytes": total_bytes,
+            "gaia_snapshot_at": pool.get("generated_at"),
+        }
+    if not entries:
+        raise HTTPException(404, "当前筛选没有可下载图片")
+    if len(entries) > EXPORT_MAX_FILES or total_bytes > EXPORT_MAX_BYTES:
+        raise HTTPException(413, f"筛选结果过大（{len(entries)} 张，约 {total_bytes / 1024 / 1024:.1f} MB），请缩小品牌或型号范围")
+    return _zip_response(entries, total_bytes)
 
 
 @router.get("/coverage-upload-context")
