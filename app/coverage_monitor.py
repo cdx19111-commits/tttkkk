@@ -10,7 +10,7 @@ import re
 import sqlite3
 import threading
 import zipfile
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
@@ -193,7 +193,7 @@ def _zip_response(entries: list[dict], total_bytes: int) -> StreamingResponse:
         finally:
             stop.set()
 
-    filename = f"asset-export-{datetime.now().strftime('%Y%m%d-%H%M')}.zip"
+    filename = f"asset-export-{datetime.now(timezone(timedelta(hours=8))).strftime('%Y%m%d-%H%M')}.zip"
     return StreamingResponse(body(), media_type="application/zip", headers={
         "Content-Disposition": f'attachment; filename="{filename}"',
         "Cache-Control": "no-store",
