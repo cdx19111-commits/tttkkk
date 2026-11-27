@@ -7,7 +7,7 @@ COPY requirements.txt /app/requirements.txt
 ARG PIP_OFFLINE=0
 RUN PIP_NO_INDEX=$PIP_OFFLINE PIP_DISABLE_PIP_VERSION_CHECK=1 pip install --no-cache-dir -r requirements.txt
 RUN mkdir -p /app/app
-COPY app/__init__.py app/main.py app/auth.py app/api_proxy.py app/storage_contract.py /app/app/
+COPY app/__init__.py app/main.py app/api_proxy.py app/storage_contract.py /app/app/
 COPY app/static /app/app/static
 RUN mkdir -p /app/runtime /app/app/static && touch /app/app/static/model_params.json
 EXPOSE 8000
