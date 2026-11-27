@@ -451,6 +451,11 @@ def output_path(target: Target) -> Path:
 
 
 def generate_one(conn: sqlite3.Connection, target: Target, force: bool, run_id: str) -> dict:
+    if target.category == "phone":
+        expected = "ios_phone" if brand_group(target.brand_label) == "apple" else "android_phone"
+        if target.template_key != expected:
+            raise RuntimeError(f"模板分类冲突：{target.model_name} 品牌 {target.brand_label} "
+                               f"应为 {expected}，实际 {target.template_key}")
     template = resolve_template(conn, target.shop_id, target.template_key)
     if not template:
         return {"model_name": target.model_name, "model_key": target.key,
@@ -468,7 +473,8 @@ def generate_one(conn: sqlite3.Connection, target: Target, force: bool, run_id: 
     cfg = {"global": {"font_path": FONT_PATH, "bg_mode": "white",
                       "prefer_ai_remove_bg": False},
            "templates": {target.template_key: template_cfg}}
-    image = compose(target.template_key, cutout, target.model_name, cfg)
+    text = str(template_cfg.get("product_name", {}).get("text") or target.model_name)
+    image = compose(target.template_key, cutout, text, cfg)
     output = output_path(target)
     output.parent.mkdir(parents=True, exist_ok=True)
     temp = output.with_name(output.name + ".tmp")
@@ -1056,6 +1062,81 @@ def activate_template(template_id: int):
     return template_payload(new)
 
 
+TEMPLATE_CATEGORIES = {"ios_phone", "android_phone", "ipad",
+                       "android_tablet", "watch", "other_digital"}
+
+
+@app.delete("/api/v1/main-images/templates/{template_id}")
+def delete_template(template_id: int):
+    with db() as conn:
+        row = conn.execute("select * from main_templates where id=?", (template_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "模板不存在")
+        image_path = row["image_path"]
+        versions = conn.execute("""select id,active from main_templates
+            where scope=? and shop_id=? and image_path=?""",
+            (row["scope"], row["shop_id"], image_path)).fetchall()
+        was_active = any(int(v["active"]) for v in versions)
+        conn.execute("""delete from main_templates
+            where scope=? and shop_id=? and image_path=?""",
+            (row["scope"], row["shop_id"], image_path))
+        next_active = None
+        if was_active:
+            nxt = conn.execute("""select id from main_templates
+                where scope=? and shop_id=? and category=? and active=1
+                order by version desc limit 1""",
+                (row["scope"], row["shop_id"], row["category"])).fetchone()
+            if not nxt:
+                nxt = conn.execute("""select id from main_templates
+                    where scope=? and shop_id=? and category=?
+                    order by version desc limit 1""",
+                    (row["scope"], row["shop_id"], row["category"])).fetchone()
+            if nxt:
+                conn.execute("update main_templates set active=1 where id=?", (nxt["id"],))
+                next_active = nxt["id"]
+        refs = conn.execute("select count(*) from main_templates where image_path=?",
+                            (image_path,)).fetchone()[0]
+        conn.commit()
+    if refs == 0:
+        try:
+            Path(image_path).unlink(missing_ok=True)
+        except OSError:
+            pass
+    return {"ok": True, "deleted_version_count": len(versions),
+            "next_active": next_active}
+
+
+@app.post("/api/v1/main-images/templates/{template_id}/delete")
+def delete_template_post(template_id: int):
+    return delete_template(template_id)
+
+
+@app.post("/api/v1/main-images/templates/{template_id}/category")
+async def move_template_category(template_id: int, request: Request):
+    payload = await request.json()
+    category = str(payload.get("category") or "").strip()
+    if category not in TEMPLATE_CATEGORIES:
+        raise HTTPException(400, "不支持的细分品类")
+    with db() as conn:
+        row = conn.execute("select * from main_templates where id=?", (template_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "模板不存在")
+        if row["category"] == category:
+            return template_payload(row)
+        if int(row["active"]):
+            conn.execute("""update main_templates set active=0
+                where scope=? and shop_id=? and category=?""",
+                (row["scope"], row["shop_id"], category))
+        conn.execute("""update main_templates set category=?
+            where scope=? and shop_id=? and image_path=?""",
+            (category, row["scope"], row["shop_id"], row["image_path"]))
+        if int(row["active"]):
+            conn.execute("update main_templates set active=1 where id=?", (row["id"],))
+        conn.commit()
+        moved = conn.execute("select * from main_templates where id=?", (row["id"],)).fetchone()
+    return template_payload(moved)
+
+
 @app.get("/api/v1/main-images/template-sample")
 def template_sample(category: str = "ios_phone"):
     with db() as conn:
@@ -1066,6 +1147,45 @@ def template_sample(category: str = "ios_phone"):
         raise HTTPException(404, "模板示例不存在")
     return FileResponse(row["image_path"], media_type="image/png",
                         filename=f"{category}-template-sample.png")
+
+
+@app.get("/api/v1/main-images/templates/{template_id}/preview-image")
+def template_preview_image(template_id: int, shop_id: str = SHOP_ID):
+    with db() as conn:
+        template = conn.execute("select * from main_templates where id=?", (template_id,)).fetchone()
+        if not template:
+            raise HTTPException(404, "模板不存在")
+        candidates = targets(shop_id)
+        if not candidates:
+            for other_shop in SHOP_NAMES:
+                if other_shop == shop_id:
+                    continue
+                candidates = targets(other_shop)
+                if candidates:
+                    break
+        target = next((t for t in candidates if t.template_key == template["category"]), None)
+        if target is None and candidates:
+            target = candidates[0]
+        if target is None:
+            raise HTTPException(409, "没有可用于预览的型号")
+        source = conn.execute("select * from model_sources where shop_id=? and model_key=?",
+                              (target.shop_id, target.key)).fetchone()
+    source_path = (REAL_V03 / source["source_path"]) if source else REAL_V03 / target.sources[0].local_path
+    if not source_path.is_file():
+        source_path = REAL_V03 / target.sources[0].local_path
+    cutout, _ = cutout_product(source_path)
+    cfg = json.loads(template["config_json"])
+    cfg["template_path"] = template["image_path"]
+    text = str(cfg.get("product_name", {}).get("text") or target.model_name)
+    image = compose(target.template_key, cutout, text,
+                    {"global": {"font_path": FONT_PATH, "bg_mode": "white",
+                                "prefer_ai_remove_bg": False},
+                     "templates": {target.template_key: cfg}})
+    from io import BytesIO
+    buffer = BytesIO()
+    image.save(buffer, "PNG")
+    return Response(buffer.getvalue(), media_type="image/png",
+                    headers={"Cache-Control": "private, no-cache"})
 
 
 @app.get("/api/v1/main-images/templates/{template_id}/image")
@@ -1104,16 +1224,28 @@ async def upload_template(shop_id: str = Form(""), category: str = Form(...),
         base.mkdir(parents=True, exist_ok=True)
         image_path = base / f"v{version}.png"
         shutil.move(str(temp), str(image_path))
-        cfg = json.loads(config_json) if config_json else default_configs()["templates"].get(category, {})
+        if config_json:
+            cfg = json.loads(config_json)
+        else:
+            cfg = json.loads(json.dumps(default_configs()["templates"].get(category, {})))
+            if scope == "shop":
+                cfg.setdefault("product_image", {})["center_x"] = 540
+                cfg.setdefault("product_image", {})["center_y"] = 540
+                cfg.setdefault("product_name", {})["center_x"] = 540
+                cfg.setdefault("product_name", {})["center_y"] = 150
+            cfg.setdefault("product_name", {})["text"] = ""
         cfg = dict(cfg)
         cfg["template_path"] = str(image_path)
-        conn.execute("update main_templates set active=0 where scope=? and shop_id=? and category=?",
-                     (scope, shop_id, category))
+        # Shop uploads stay inactive until the business saves the layout editor.
+        active = 0 if scope == "shop" else 1
+        if active:
+            conn.execute("update main_templates set active=0 where scope=? and shop_id=? and category=?",
+                         (scope, shop_id, category))
         cur = conn.execute("""insert into main_templates
             (scope, shop_id, category, name, image_path, config_json, version, active, created_at)
-            values (?,?,?,?,?,?,?,1,?)""",
+            values (?,?,?,?,?,?,?,?,?)""",
             (scope, shop_id, category, name or category, str(image_path),
-             json.dumps(cfg, ensure_ascii=False), version, now()))
+             json.dumps(cfg, ensure_ascii=False), version, active, now()))
         conn.commit()
         row = conn.execute("select * from main_templates where id=?", (cur.lastrowid,)).fetchone()
     return template_payload(row)
@@ -1131,6 +1263,20 @@ async def update_template_config(template_id: int, request: Request):
         cfg = json.loads(row["config_json"])
         cfg["product_image"] = {**cfg.get("product_image", {}), **product}
         cfg["product_name"] = {**cfg.get("product_name", {}), **text}
+        for key in ("center_x", "center_y"):
+            if key in cfg["product_image"]:
+                cfg["product_image"][key] = max(0, min(1080, int(cfg["product_image"][key])))
+            if key in cfg["product_name"]:
+                cfg["product_name"][key] = max(0, min(1080, int(cfg["product_name"][key])))
+        for key in ("max_width", "max_height"):
+            if key in cfg["product_image"]:
+                cfg["product_image"][key] = max(40, min(1080, int(cfg["product_image"][key])))
+        if "font_size" in cfg["product_name"]:
+            cfg["product_name"]["font_size"] = max(10, min(160, int(cfg["product_name"]["font_size"])))
+        if "max_width" in cfg["product_name"]:
+            cfg["product_name"]["max_width"] = max(40, min(1080, int(cfg["product_name"]["max_width"])))
+        if "text" in cfg["product_name"]:
+            cfg["product_name"]["text"] = str(cfg["product_name"]["text"] or "")[:80]
         cfg["template_path"] = row["image_path"]
         version = row["version"] + 1
         conn.execute("""update main_templates set active=0
@@ -1144,6 +1290,57 @@ async def update_template_config(template_id: int, request: Request):
         conn.commit()
         new = conn.execute("select * from main_templates where id=?", (cur.lastrowid,)).fetchone()
     return template_payload(new)
+
+
+@app.get("/api/v1/main-images/product-cutout")
+def product_cutout(model_key: str, shop_id: str = SHOP_ID):
+    target = next((t for t in targets(shop_id) if t.key == model_key), None)
+    if not target:
+        raise HTTPException(404, "型号不存在")
+    with db() as conn:
+        _source, cutout, _stats, _reason = choose_source(conn, target)
+    from io import BytesIO
+    buffer = BytesIO()
+    cutout.save(buffer, "PNG")
+    return Response(buffer.getvalue(), media_type="image/png",
+                    headers={"Cache-Control": "private, no-cache"})
+
+
+@app.post("/api/v1/main-images/preview-config")
+async def preview_config(request: Request):
+    payload = await request.json()
+    shop_id = str(payload.get("shop_id") or SHOP_ID)
+    model_key = str(payload.get("model_key") or "")
+    template_id = payload.get("template_id")
+    incoming = payload.get("config") or {}
+    target = next((t for t in targets(shop_id) if t.key == model_key), None)
+    if not target:
+        raise HTTPException(404, "型号不存在")
+    with db() as conn:
+        template = (conn.execute("select * from main_templates where id=?", (template_id,)).fetchone()
+                    if template_id else resolve_template(conn, target.shop_id, target.template_key))
+        source = conn.execute("select * from model_sources where shop_id=? and model_key=?",
+                              (shop_id, model_key)).fetchone()
+    if not template:
+        raise HTTPException(409, "没有可用模板")
+    cfg = json.loads(template["config_json"])
+    for section in ("product_image", "product_name"):
+        cfg[section] = {**cfg.get(section, {}), **(incoming.get(section) or {})}
+    cfg["template_path"] = template["image_path"]
+    source_path = (REAL_V03 / source["source_path"]) if source else None
+    if source_path is None or not source_path.is_file():
+        source_path = REAL_V03 / target.sources[0].local_path
+    cutout, _ = cutout_product(source_path)
+    text = str(cfg.get("product_name", {}).get("text") or target.model_name)
+    image = compose(target.template_key, cutout, text,
+                    {"global": {"font_path": FONT_PATH, "bg_mode": "white",
+                                "prefer_ai_remove_bg": False},
+                     "templates": {target.template_key: cfg}})
+    from io import BytesIO
+    buffer = BytesIO()
+    image.save(buffer, "PNG")
+    return Response(buffer.getvalue(), media_type="image/png",
+                    headers={"Cache-Control": "private, no-cache"})
 
 
 @app.get("/api/v1/main-images/preview")
@@ -1165,7 +1362,8 @@ def preview(model_key: str, template_id: Optional[int] = None, shop_id: str = SH
     cutout, _ = cutout_product(source_path)
     cfg = json.loads(template["config_json"])
     cfg["template_path"] = template["image_path"]
-    image = compose(target.template_key, cutout, target.model_name,
+    text = str(cfg.get("product_name", {}).get("text") or target.model_name)
+    image = compose(target.template_key, cutout, text,
                     {"global": {"font_path": FONT_PATH, "bg_mode": "white",
                                 "prefer_ai_remove_bg": False},
                      "templates": {target.template_key: cfg}})
