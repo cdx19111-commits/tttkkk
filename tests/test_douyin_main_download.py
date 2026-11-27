@@ -3,13 +3,13 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = ROOT / "frontend-modules/douyin-main/versions/1.0.19"
+VERSION = ROOT / "frontend-modules/douyin-main/versions/1.0.20"
 
 
 def test_download_release_is_complete():
     meta = json.loads((VERSION / "module.json").read_text(encoding="utf-8"))
     assert meta["id"] == "douyin-main"
-    assert meta["version"] == "1.0.19"
+    assert meta["version"] == "1.0.20"
     assert all((VERSION / name).is_file()
                for name in ("index.html", "module.js", "module.css"))
 
