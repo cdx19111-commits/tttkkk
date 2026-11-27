@@ -1,0 +1,9 @@
+{
+  "id": "douyin-main",
+  "version": "1.0.19",
+  "title": "抖音主图",
+  "subtitle": "按飞书云盘目录浏览 · 原图独立存放",
+  "nav_label": "抖音主图",
+  "icon": "▣",
+  "order": 20
+}
