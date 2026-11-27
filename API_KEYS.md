@@ -1,6 +1,6 @@
 # 对外接口 API Key 台账
 
-> 本文件由 `tools/api_keys.py` 自动生成，**不要手改**。最后更新：2026-11-27 20:38
+> 本文件由 `tools/api_keys.py` 自动生成，**不要手改**。最后更新：2026-11-27 20:42
 > 明文钥匙只在签发人本机的 `config/api_keys.local.json`（gitignore，不入库）；
 > 服务器只存 sha256 指纹，位置 `/opt/gallery-mvp/runtime/api_keys.json`。
 

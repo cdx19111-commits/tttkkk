@@ -24,3 +24,4 @@ frontend-modules/.release-events/
 
 # 本机保存的 API Key 明文，绝不入库（仓库为 public）
 config/api_keys.local.json
+API_KEYS.local.md

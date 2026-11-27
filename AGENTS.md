@@ -183,6 +183,7 @@
 
 - 签发/撤销/查看一律走 `tools/api_keys.py`：`issue --owner <人名> --scope read|full --note <用途>`、`revoke --owner <人名>`、`list`。不要手改服务器上的钥匙文件，也不要临时自造脚本。
 - 台账 `API_KEYS.md`（脚本生成、进 Git）：被问到「谁能用我们的 API」时先读台账，不要凭记忆。
+- 明文清单 `API_KEYS.local.md`（脚本同时生成、**gitignore 不入库**）：本机随时可看某人的钥匙原文；**绝不能复制进 `API_KEYS.md` 或任何提交文件**——仓库是 public，等于公开钥匙。
 - 明文钥匙只放本机 `config/api_keys.local.json`（gitignore，**绝不提交**；仓库是 public）；服务器只存 sha256 指纹，不存明文。
 - 权限由服务端按钥匙记录判定，**不接受调用方在入参里声明 scope**：`read` 只能调只读接口，`full` 才允许写。目前对外接口均为只读语义，先只发 `read`。
 - 每次签发/撤销后：脚本刷新 `API_KEYS.md`，并在 `项目日志.md` 追加一条事件（谁、哪天、什么权限、用途）。

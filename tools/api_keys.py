@@ -28,6 +28,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 LOCAL = REPO / "config" / "api_keys.local.json"
 LEDGER = REPO / "API_KEYS.md"
+LOCAL_VIEW = REPO / "API_KEYS.local.md"
 PROJECT_LOG = REPO / "项目日志.md"
 SSH_HOST = os.environ.get("GALLERY_SSH", "gallery-target")
 SERVER_FILE = os.environ.get("GALLERY_API_KEYS_FILE", "/opt/gallery-mvp/runtime/api_keys.json")
@@ -100,7 +101,37 @@ def sync_doc(data: dict) -> None:
 {body}
 """
     LEDGER.write_text(content, encoding="utf-8")
-    print(f"台账已刷新：{LEDGER.relative_to(REPO)}")
+    write_local_view(data)
+    print(f"台账已刷新：{LEDGER.relative_to(REPO)}（另有本机明文清单 {LOCAL_VIEW.name}）")
+
+
+def write_local_view(data: dict) -> None:
+    """本机明文清单：进 Finder 方便看，但我绝不提交（gitignore）。"""
+    rows = []
+    for item in data["keys"]:
+        scope = "只读" if item.get("scope") == "read" else "读写"
+        status = "启用" if item.get("status") == "active" else "已撤销"
+        rows.append(f"| {item.get('owner','')} | {scope} | {status} | {item.get('issued_at','')} | "
+                    f"{item.get('note','') or '-'} | `{item.get('key','')}` |")
+    body = "\n".join(rows) if rows else "| — | — | — | — | — | 尚未签发 |"
+    content = f"""# API Key 明文清单（仅本机，绝不提交）
+
+> 本文件由 `tools/api_keys.py` 自动生成，已在 `.gitignore` 中；**不要复制进 API_KEYS.md 或任何提交的文件**。
+> 仓库是公开的，钥匙明文一旦提交等于公开。最后更新：{_now()}
+
+| 姓名 | 权限 | 状态 | 签发时间 | 用途 | 钥匙 |
+|---|---|---|---|---|---|
+{body}
+
+用法示例：
+
+```bash
+curl -H "X-API-Key: <上表里的钥匙>" \\
+  "http://47.95.20.94:18090/openapi/v1/listing/models?brand=Apple&limit=10"
+```
+"""
+    LOCAL_VIEW.write_text(content, encoding="utf-8")
+    LOCAL_VIEW.chmod(0o600)
 
 
 def append_log(text: str) -> None:
