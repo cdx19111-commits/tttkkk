@@ -1073,13 +1073,8 @@ def delete_template(template_id: int):
         if not row:
             raise HTTPException(404, "模板不存在")
         image_path = row["image_path"]
-        versions = conn.execute("""select id,active from main_templates
-            where scope=? and shop_id=? and image_path=?""",
-            (row["scope"], row["shop_id"], image_path)).fetchall()
-        was_active = any(int(v["active"]) for v in versions)
-        conn.execute("""delete from main_templates
-            where scope=? and shop_id=? and image_path=?""",
-            (row["scope"], row["shop_id"], image_path))
+        was_active = bool(int(row["active"] or 0))
+        conn.execute("delete from main_templates where id=?", (template_id,))
         next_active = None
         if was_active:
             nxt = conn.execute("""select id from main_templates
@@ -1102,8 +1097,7 @@ def delete_template(template_id: int):
             Path(image_path).unlink(missing_ok=True)
         except OSError:
             pass
-    return {"ok": True, "deleted_version_count": len(versions),
-            "next_active": next_active}
+    return {"ok": True, "deleted_version_count": 1, "next_active": next_active}
 
 
 @app.post("/api/v1/main-images/templates/{template_id}/delete")
@@ -1121,19 +1115,25 @@ async def move_template_category(template_id: int, request: Request):
         row = conn.execute("select * from main_templates where id=?", (template_id,)).fetchone()
         if not row:
             raise HTTPException(404, "模板不存在")
-        if row["category"] == category:
+        old_category = row["category"]
+        if old_category == category:
             return template_payload(row)
-        if int(row["active"]):
+        was_active = bool(int(row["active"] or 0))
+        if was_active:
             conn.execute("""update main_templates set active=0
-                where scope=? and shop_id=? and category=?""",
-                (row["scope"], row["shop_id"], category))
-        conn.execute("""update main_templates set category=?
-            where scope=? and shop_id=? and image_path=?""",
-            (category, row["scope"], row["shop_id"], row["image_path"]))
-        if int(row["active"]):
-            conn.execute("update main_templates set active=1 where id=?", (row["id"],))
+                where scope=? and shop_id=? and category in (?,?)""",
+                (row["scope"], row["shop_id"], old_category, category))
+        conn.execute("update main_templates set category=? where id=?", (category, template_id))
+        if was_active:
+            conn.execute("update main_templates set active=1 where id=?", (template_id,))
+            nxt = conn.execute("""select id from main_templates
+                where scope=? and shop_id=? and category=?
+                order by version desc limit 1""",
+                (row["scope"], row["shop_id"], old_category)).fetchone()
+            if nxt:
+                conn.execute("update main_templates set active=1 where id=?", (nxt["id"],))
         conn.commit()
-        moved = conn.execute("select * from main_templates where id=?", (row["id"],)).fetchone()
+        moved = conn.execute("select * from main_templates where id=?", (template_id,)).fetchone()
     return template_payload(moved)
 
 
@@ -1219,6 +1219,18 @@ def normalize_template_image(path: Path) -> "Image.Image":
         if (width, height) != (1080, 1080):
             canvas = canvas.resize((1080, 1080), Image.Resampling.LANCZOS)
         return canvas
+
+
+@app.get("/api/v1/main-images/font")
+def template_font():
+    path = Path(FONT_PATH)
+    if not path.is_file():
+        raise HTTPException(404, "模板字体不可用")
+    suffix = path.suffix.lower()
+    media = {".ttc": "font/collection", ".ttf": "font/ttf",
+             ".otf": "font/otf"}.get(suffix, "application/octet-stream")
+    return FileResponse(path, media_type=media,
+                        headers={"Cache-Control": "private, max-age=86400"})
 
 
 @app.post("/api/v1/main-images/templates/upload")
@@ -1308,17 +1320,14 @@ async def update_template_config(template_id: int, request: Request):
         if "text" in cfg["product_name"]:
             cfg["product_name"]["text"] = str(cfg["product_name"]["text"] or "")[:80]
         cfg["template_path"] = row["image_path"]
-        version = row["version"] + 1
+        # 版式调整只更新当前这一条，不再自动创建新版本。
+        conn.execute("""update main_templates set config_json=?, active=1
+            where id=?""", (json.dumps(cfg, ensure_ascii=False), template_id))
         conn.execute("""update main_templates set active=0
-            where scope=? and shop_id=? and category=?""",
-            (row["scope"], row["shop_id"], row["category"]))
-        cur = conn.execute("""insert into main_templates
-            (scope, shop_id, category, name, image_path, config_json, version, active, created_at)
-            values (?,?,?,?,?,?,?,1,?)""",
-            (row["scope"], row["shop_id"], row["category"], row["name"],
-             row["image_path"], json.dumps(cfg, ensure_ascii=False), version, now()))
+            where scope=? and shop_id=? and category=? and id<>?""",
+            (row["scope"], row["shop_id"], row["category"], template_id))
         conn.commit()
-        new = conn.execute("select * from main_templates where id=?", (cur.lastrowid,)).fetchone()
+        new = conn.execute("select * from main_templates where id=?", (template_id,)).fetchone()
     return template_payload(new)
 
 

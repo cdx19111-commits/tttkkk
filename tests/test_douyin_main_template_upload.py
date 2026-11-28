@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = ROOT / "frontend-modules/douyin-main/versions/1.0.20"
+VERSION = ROOT / "frontend-modules/douyin-main/versions/1.0.21"
 
 
 def test_template_upload_accepts_square_sizes_and_normalizes_server_side():
