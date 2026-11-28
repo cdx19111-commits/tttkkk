@@ -257,15 +257,18 @@ def draw_text_with_max_width(draw: ImageDraw.Draw, text: str, position: Tuple[in
 
     x, y = position
     if origin == "topleft":
-        # position 是文字左上角，需要计算基线偏移
-        baseline_offset = bbox[1]
-        y = y - baseline_offset
-        # 左上角模式下保持左对齐，忽略 align
+        # position 是墨迹左上角：把 ink bbox 的左上角对齐到 (x, y)
+        x = x - bbox[0]
+        y = y - bbox[1]
     else:
+        # position 是墨迹中心：按 ink bbox 居中，而不是按字体 ascent 顶部
         if align == "center":
-            x = x - text_w // 2
+            x = x - (bbox[0] + bbox[2]) // 2
         elif align == "right":
-            x = x - text_w
+            x = x - bbox[2]
+        else:
+            x = x - bbox[0]
+        y = y - (bbox[1] + bbox[3]) // 2
 
     if bold:
         # 使用描边模拟加粗效果
